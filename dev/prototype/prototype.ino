@@ -1,6 +1,8 @@
+#include <string.h>
+#include <bluefruit.h>
 #include "Adafruit_TinyUSB.h"
 #include "HX711.h"
-#include <bluefruit.h>
+#include "flash.h"
 
 // Indices in the advertised data for things we plan to change.
 #define SCALE_DATA_LEN           19   // See scale_data init below.
@@ -9,9 +11,14 @@
 #define SCALE_DATA_TIMESTAMP_MSB 17
 #define SCALE_DATA_TIMESTAMP_LSB 18
 
+// Alternative program states.
+// set to 1 in setup() if tare button is pressed
+int doCalibrate = 0;  // 1 time during startup.
+int debug = 1;        // 3 times during startup.
+
 // Tare button
 const int tarePin = 10;  // the tare button
-const int buttonPin = 9; // For pretending to get a weight
+
 // RGB LED
 const int redPin = 6;    // the number of the LED pin
 const int greenPin = 5;    // the number of the LED pin
@@ -23,7 +30,6 @@ const uint8_t LOADCELL_SCK_PIN = 8;
 const int LOADCELL_GAIN = 128;
 
 int tareState = 0;  // tare button push state.
-int buttonState = 0;
 
 // Current LED color
 uint8_t color[3] = {0,0,0};
@@ -83,20 +89,6 @@ void flashLED(void)
   }
 }
 
-void tare(void)
-{
-  Serial.println("Taring...");
-  scale.tare();
-  weight = 0;
-  flashLED();
-}
-
-void tareFake(void)
-{
-  weight = 0;
-  flashLED();
-}
-
 void advertiseData(void)
 {
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
@@ -114,30 +106,23 @@ void advertiseData(void)
   Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising.
 }
 
-uint32_t getWeight(void)
+void tare(void)
+{
+  debugPrintln("Taring...");
+  scale.tare();
+  weight = 0;
+  flashLED();
+}
+
+void getWeight(void)
 {
   // Take a reading from the HX711.
-  if (scale.wait_ready_retry(10)) {
-    long reading = scale.read();
-    Serial.print("Reading: ");
-    Serial.println(reading);
-    return reading;
-  } else {
-    Serial.println("HX711 not found.");
-    setColor(255, 0, 0); // Red
+  if (scale.is_ready()) {
+    weight = scale.get_units(1);
+    debugPrint("Reading: ");
+    debugPrintln(weight);
   }
-  return 0;
 }
-
-uint32_t getWeightFake(void)
-{
-  buttonState = digitalRead(buttonPin);
-  if (buttonState == HIGH) {
-    weight += 100;
-  }
-  return weight;
-}
-
 
 void updateWeight(uint32_t weight)
 {
@@ -146,9 +131,6 @@ void updateWeight(uint32_t weight)
   uint8_t lsb = ((weight / 10) & 0x00FFU);
   scale_data[SCALE_DATA_WEIGHT_INT] = msb;
   scale_data[SCALE_DATA_WEIGHT_FRAC] = lsb;
-  char sbuf[30];
-  sprintf(sbuf, "Weight: %02X %02X %d", msb, lsb, weight);
-  Serial.println(sbuf);
 }
 
 void updateTimestamp(uint16_t time)
@@ -158,9 +140,6 @@ void updateTimestamp(uint16_t time)
   uint8_t lsb = (time & 0x00FFU);
   scale_data[SCALE_DATA_TIMESTAMP_MSB] = msb;
   scale_data[SCALE_DATA_TIMESTAMP_LSB] = lsb;
-  char sbuf[30];
-  sprintf(sbuf, "Time: %02X %02X %d", msb, lsb, time);
-  Serial.println(sbuf);
 }
 
 void updateAdvData(void)
@@ -171,63 +150,170 @@ void updateAdvData(void)
   Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
 }
 
+template <typename T>
+void debugPrint(T msg)
+{
+  if (debug == true) {
+    Serial.print(msg);
+  }
+}
+
+template <typename T>
+void debugPrintln(T msg)
+{
+  if (debug == true) {
+    Serial.println(msg);
+  }
+}
+
+void calibrate(void) {
+  Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
+  Serial.println("Running scale calibration");
+  Serial.println("=========================\n");
+
+  scale.set_scale();
+  scale.tare();
+  Serial.println("Place a known weight on the scale, then enter its weight in grams.");
+  Serial.print("grams: ");
+
+  char inByte;
+  uint8_t bufsize = 128;
+  char inputBuffer[bufsize];
+  int bufPtr = 0;
+  while (inByte != '\n' && inByte != '\r') {
+    if (Serial.available() > 0) {
+      inByte = Serial.read();
+      if (inByte == ' ') {  // Skip empty space.
+        continue;
+      } else {
+        if (bufPtr < (bufsize - 1)) {
+          inputBuffer[bufPtr++] = inByte;
+        }
+      }
+      Serial.print(inByte);
+    }
+  }
+  inputBuffer[bufPtr++] = '\0';
+  bufPtr = 0;
+
+  float kgs = strtod(inputBuffer, NULL);
+  
+  Serial.println();
+  Serial.println("Running calibration for 10 iterations...");
+
+  float sum = 0.0f;
+  for (int i=0; i<10; i++) {
+    float reading = scale.get_units(10);
+    float scale_param = reading / kgs;
+    sum += scale_param;
+    Serial.println(reading);
+    Serial.print("Estimated scale parameter: ");
+    Serial.println(scale_param);
+    delay(250);
+  }
+  float mean_param = sum / 10.0;
+  Serial.print("Average scale parameter: ");
+  Serial.println(uint32_t(mean_param));
+  Serial.println("Saving to internal memory");
+  initFlash();
+  saveScaleParam(uint32_t(mean_param));
+  Serial.println("Validating saved parameter");
+  uint32_t read_param = readScaleParam();
+  Serial.println(read_param);
+}
+
 void setup() {
-  // initialize the pushbutton.
+  // initialize the tare button.
   pinMode(tarePin, INPUT);
-  pinMode(buttonPin, INPUT);
   // initialize the LED.
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
-  // Set the color to a nice light blue.
-  setColor(0, 175, 255);
+
+  // At startup show green for 1s
+  // allowing user to press tare to enter calibration mode.
+  setColor(0, 255, 0);
   setLedColor();
+  curr_time = millis();
+  prev_time = millis();
+  while (curr_time - prev_time < 1000) {
+    tareState = digitalRead(tarePin);
+    if (tareState == HIGH) {
+      doCalibrate = 1;
+    }
+    curr_time = millis();
+  }
+  curr_time = 0;
+  prev_time = 0;
+
+  if (doCalibrate == 1) {
+    // white
+    setColor(255, 255, 255);
+    setLedColor();
+  } else { 
+    // light blue
+    setColor(0, 175, 255);
+    setLedColor();
+  }
 
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // for nrf52840 with native usb
-
   // Initialize the scale
-  /*
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
   delay(250);
   scale.power_up();
   delay(250);
   if (scale.wait_ready_timeout(1000)) {
-    Serial.println("HX711 found");
-  } else {
-    Serial.println("HX711 not found.");
+    debugPrintln("HX711 found");
   }
   scale.set_gain(128);
-  //scale.set_scale(436400.f);
-  scale.set_scale();
+
+  if (doCalibrate == 1) {
+    calibrate();
+    // light blue
+    setColor(0, 175, 255);
+    setLedColor();
+  }
+
+  initFlash();
+  uint32_t scale_param = readScaleParam();
+  debugPrint("Scale set to ");
+  debugPrintln(float(scale_param));
+  scale.set_scale(float(scale_param));
   tare();
-  */
 
   // Start BLE
   Bluefruit.begin();
   //Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   advertiseData();
-  Serial.println(F("Advertising..."));
-  Serial.println();  
+  debugPrintln("BLE Advertising");
 }
 
 void loop() {
   tareState = digitalRead(tarePin);
   // Tare when button pressed.
   if (tareState == HIGH) {
-    //tare();
-    tareFake();
+    tare();
   }
 
   curr_time = millis();
   if (curr_time - prev_time >= 20) {
     // Poll the HX711 and advertise the new reading every 20ms.
     prev_time = curr_time;
-    //weight = getWeight();
-    weight = getWeightFake();
+    // Could wait for a reading from getWeight and then update?
+    getWeight();  // Sets weight
     updateWeight(weight);
     updateTimestamp(curr_time);
     updateAdvData();
+    uint8_t wmsb = scale_data[SCALE_DATA_WEIGHT_INT];
+    uint8_t wlsb = scale_data[SCALE_DATA_WEIGHT_FRAC];
+    uint8_t tmsb = scale_data[SCALE_DATA_TIMESTAMP_MSB];
+    uint8_t tlsb = scale_data[SCALE_DATA_TIMESTAMP_LSB];
+    char sbuf[50];
+    sprintf(sbuf, "Weight: %02X %02X (%d) || Time: %02X %02X (%d)",
+            wmsb, wlsb, weight, tmsb, tlsb, curr_time);
+    debugPrintln(sbuf);
   } else if (curr_time < prev_time ) {  // Overflow so we reset.
     curr_time = 0;
     prev_time = 0;
