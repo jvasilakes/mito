@@ -47,9 +47,11 @@ uint8_t scale_data[SCALE_DATA_LEN] = {
 };
 
 uint32_t weight = 0;  // Current weight reading
-uint16_t curr_time = 0;  // Current time stamp
 uint16_t prev_time = 0;  // To measure increments without delay() 
+uint16_t curr_time = 0;  // Current time stamp
 
+int num_samples = 0;
+int hz = 0;  // For measuring HX711 speed.
 HX711 scale;
 
 
@@ -114,14 +116,16 @@ void tare(void)
   flashLED();
 }
 
-void getWeight(void)
+int getWeight(void)
 {
   // Take a reading from the HX711.
   if (scale.is_ready()) {
     weight = scale.get_units(1);
     debugPrint("Reading: ");
     debugPrintln(weight);
+    return 1;
   }
+  return 0;
 }
 
 void updateWeight(uint32_t weight)
@@ -245,8 +249,8 @@ void setup() {
     }
     curr_time = millis();
   }
-  curr_time = 0;
-  prev_time = 0;
+  curr_time = millis();
+  prev_time = millis();
 
   if (doCalibrate == 1) {
     // white
@@ -297,12 +301,12 @@ void loop() {
     tare();
   }
 
-  curr_time = millis();
-  if (curr_time - prev_time >= 20) {
-    // Poll the HX711 and advertise the new reading every 20ms.
-    prev_time = curr_time;
-    // Could wait for a reading from getWeight and then update?
-    getWeight();  // Sets weight
+  // Update the advertisement every time we get a new weight.
+  // This is 10Hz by default on the HX711, but can be increased
+  // to 80Hz via the RATE pin.
+  int got_weight = getWeight();
+  if (got_weight == 1) {
+    curr_time = millis();
     updateWeight(weight);
     updateTimestamp(curr_time);
     updateAdvData();
@@ -314,8 +318,15 @@ void loop() {
     sprintf(sbuf, "Weight: %02X %02X (%d) || Time: %02X %02X (%d)",
             wmsb, wlsb, weight, tmsb, tlsb, curr_time);
     debugPrintln(sbuf);
-  } else if (curr_time < prev_time ) {  // Overflow so we reset.
-    curr_time = 0;
-    prev_time = 0;
+    num_samples += 1;
+  }
+
+  if ((curr_time - prev_time) >= 1000) {
+    hz = num_samples;
+    debugPrint("Hz: ");
+    debugPrintln(hz);
+    curr_time = millis();
+    prev_time = millis();
+    num_samples = 0;
   }
 }
