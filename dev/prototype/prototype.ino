@@ -46,7 +46,11 @@ uint8_t scale_data[SCALE_DATA_LEN] = {
   0x99,0x90   // 17, 18: timestamp as uint16_t
 };
 
-uint32_t weight = 0;  // Current weight reading
+// Parameter for Exponential Moving Average
+uint32_t EMA_ALPHA = 10;
+long reading = 0;  // For computing exponential moving average.
+long smoothed_reading = 0;  // For computing exponential moving average.
+long weight = 0;  // Current weight reading in hectograms.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
 
@@ -120,19 +124,32 @@ int getWeight(void)
 {
   // Take a reading from the HX711.
   if (scale.is_ready()) {
-    weight = scale.get_units(1);
-    debugPrint("Reading: ");
-    debugPrintln(weight);
+    reading = scale.read_average(1);
+    if (smoothed_reading == 0) {
+      smoothed_reading = reading;
+    }
+    // Exponential moving average filter.
+    debugPrint(smoothed_reading);
+    debugPrint(",");
+    smoothed_reading = ((EMA_ALPHA * reading) + ((100 - EMA_ALPHA) * smoothed_reading))/100;
+    weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
+    debugPrint(reading);
+    debugPrint(",");
+    debugPrint(smoothed_reading);
+    debugPrint(",");
+    debugPrint(weight);
+    debugPrint(",");
+    debugPrintln(hz);
+    delay(1000);
     return 1;
   }
   return 0;
 }
 
-void updateWeight(uint32_t weight)
+void updateWeight(uint32_t grams)
 {
-  // Update the scale_data with a weight reading.
-  uint8_t msb = ((weight / 10) & 0xFF00U) >> 8U;
-  uint8_t lsb = ((weight / 10) & 0x00FFU);
+  uint8_t msb = ((weight * 10) & 0xFF00U) >> 8U;
+  uint8_t lsb = ((weight * 10) & 0x00FFU);
   scale_data[SCALE_DATA_WEIGHT_INT] = msb;
   scale_data[SCALE_DATA_WEIGHT_FRAC] = lsb;
 }
@@ -202,22 +219,44 @@ void calibrate(void) {
   inputBuffer[bufPtr++] = '\0';
   bufPtr = 0;
 
-  float kgs = strtod(inputBuffer, NULL);
+  float grams = strtod(inputBuffer, NULL);
+  float hectograms = grams / 100;
   
   Serial.println();
   Serial.println("Running calibration for 10 iterations...");
 
   float sum = 0.0f;
+  float total_samples = 0.0f;
   for (int i=0; i<10; i++) {
-    float reading = scale.get_units(10);
-    float scale_param = reading / kgs;
-    sum += scale_param;
-    Serial.println(reading);
-    Serial.print("Estimated scale parameter: ");
-    Serial.println(scale_param);
-    delay(250);
+    for (int j=0; j<5; j++) {
+      float reading = scale.get_units(10);
+      float scale_param = reading / hectograms;
+      sum += scale_param;
+      total_samples += 1.0f;
+      Serial.println(reading);
+      Serial.print("Estimated scale parameter: ");
+      Serial.println(scale_param);
+      delay(250);
+    }
+    Serial.println("Take the weight off and press ENTER to tare.");
+    inByte = '\0';
+    while (inByte != '\n' && inByte != '\r') {
+      if (Serial.available() > 0) {
+        inByte = Serial.read();
+      }
+    }
+    scale.set_scale();
+    scale.tare();
+    Serial.println("Put the same weight back on and press ENTER.");
+    inByte = '\0';
+    while (inByte != '\n' && inByte != '\r') {
+      if (Serial.available() > 0) {
+        inByte = Serial.read();
+      }
+    }
   }
-  float mean_param = sum / 10.0;
+
+  float mean_param = sum / total_samples;
   Serial.print("Average scale parameter: ");
   Serial.println(uint32_t(mean_param));
   Serial.println("Saving to internal memory");
@@ -263,6 +302,8 @@ void setup() {
   }
 
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+  Serial.println("Starting.");
   // Initialize the scale
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
   delay(250);
@@ -271,7 +312,7 @@ void setup() {
   if (scale.wait_ready_timeout(1000)) {
     debugPrintln("HX711 found");
   }
-  scale.set_gain(128);
+  scale.set_gain(64);
 
   if (doCalibrate == 1) {
     calibrate();
@@ -305,6 +346,7 @@ void loop() {
   // This is 10Hz by default on the HX711, but can be increased
   // to 80Hz via the RATE pin.
   int got_weight = getWeight();
+  //int got_weight = getWeightFiltered();
   if (got_weight == 1) {
     curr_time = millis();
     updateWeight(weight);
@@ -314,19 +356,18 @@ void loop() {
     uint8_t wlsb = scale_data[SCALE_DATA_WEIGHT_FRAC];
     uint8_t tmsb = scale_data[SCALE_DATA_TIMESTAMP_MSB];
     uint8_t tlsb = scale_data[SCALE_DATA_TIMESTAMP_LSB];
-    char sbuf[50];
-    sprintf(sbuf, "Weight: %02X %02X (%d) || Time: %02X %02X (%d)",
-            wmsb, wlsb, weight, tmsb, tlsb, curr_time);
-    debugPrintln(sbuf);
     num_samples += 1;
   }
 
+  // In case of overflow.
+  if (curr_time < prev_time) {
+    curr_time = prev_time = millis();
+  }
+
+  // Measure sampling rate.
   if ((curr_time - prev_time) >= 1000) {
     hz = num_samples;
-    debugPrint("Hz: ");
-    debugPrintln(hz);
-    curr_time = millis();
-    prev_time = millis();
+    curr_time = prev_time = millis();
     num_samples = 0;
   }
 }
