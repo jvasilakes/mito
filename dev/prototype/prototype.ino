@@ -11,6 +11,8 @@
 #define SCALE_DATA_TIMESTAMP_MSB 17
 #define SCALE_DATA_TIMESTAMP_LSB 18
 
+int WH06_MODE = 1;
+
 // Alternative program states.
 // set to 1 in setup() if tare button is pressed
 int doCalibrate = 0;  // 1 time during startup.
@@ -47,7 +49,7 @@ uint8_t scale_data[SCALE_DATA_LEN] = {
 };
 
 // Parameter for Exponential Moving Average
-uint32_t EMA_ALPHA = 10;
+uint32_t EMA_ALPHA = 30;
 long reading = 0;  // For computing exponential moving average.
 long smoothed_reading = 0;  // For computing exponential moving average.
 long weight = 0;  // Current weight reading in hectograms.
@@ -122,28 +124,52 @@ void tare(void)
 
 int getWeight(void)
 {
+  int maxr;
+  int minr;
+  int midr;
+  int rval = 0;
   // Take a reading from the HX711.
-  if (scale.is_ready()) {
-    reading = scale.read_average(1);
-    if (smoothed_reading == 0) {
-      smoothed_reading = reading;
+  // Remove the upper and lower outlier
+  for (int i=0; i<3; i++) {
+    if (scale.is_ready()) {
+      reading = scale.read_average(1);
+      rval = 1;
     }
-    // Exponential moving average filter.
-    debugPrint(smoothed_reading);
-    debugPrint(",");
-    smoothed_reading = ((EMA_ALPHA * reading) + ((100 - EMA_ALPHA) * smoothed_reading))/100;
-    weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
-    debugPrint(reading);
-    debugPrint(",");
-    debugPrint(smoothed_reading);
-    debugPrint(",");
-    debugPrint(weight);
-    debugPrint(",");
-    debugPrintln(hz);
-    delay(1000);
-    return 1;
+    if (i == 0) {
+      maxr = reading;
+      minr = reading;
+      midr = reading;
+    } else {
+      if (reading > maxr) {
+        maxr = reading;
+      } else if (reading < minr) {
+        minr = reading;
+      } else {
+        midr = reading;
+      }
+    }
   }
-  return 0;
+  if (smoothed_reading == 0) {
+    smoothed_reading = midr;
+  }
+  // Exponential moving average filter.
+  debugPrint(smoothed_reading);
+  debugPrint(",");
+  smoothed_reading = ((EMA_ALPHA * midr) + ((100 - EMA_ALPHA) * smoothed_reading))/100;
+  debugPrint(scale.OFFSET);
+  debugPrint(",");
+  debugPrint(scale.SCALE);
+  debugPrint(",");
+  weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
+  debugPrint(midr);
+  debugPrint(",");
+  debugPrint(smoothed_reading);
+  debugPrint(",");
+  debugPrint(weight);
+  debugPrint(",");
+  debugPrintln(hz);
+  //delay(1000);
+  return rval;
 }
 
 void updateWeight(uint32_t grams)
@@ -191,7 +217,7 @@ void calibrate(void) {
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
-  Serial.println("Running scale calibration");
+  Serial.println("Scale calibration");
   Serial.println("=========================\n");
 
   scale.set_scale();
@@ -223,12 +249,13 @@ void calibrate(void) {
   float hectograms = grams / 100;
   
   Serial.println();
-  Serial.println("Running calibration for 10 iterations...");
+  Serial.println("Running calibration...");
 
   float sum = 0.0f;
   float total_samples = 0.0f;
   for (int i=0; i<10; i++) {
-    for (int j=0; j<5; j++) {
+    //for (int j=0; j<5; j++) {
+    for (int j=0; j<1; j++) {
       float reading = scale.get_units(10);
       float scale_param = reading / hectograms;
       sum += scale_param;
@@ -238,33 +265,63 @@ void calibrate(void) {
       Serial.println(scale_param);
       delay(250);
     }
-    Serial.println("Take the weight off and press ENTER to tare.");
-    inByte = '\0';
-    while (inByte != '\n' && inByte != '\r') {
-      if (Serial.available() > 0) {
-        inByte = Serial.read();
-      }
-    }
-    scale.set_scale();
-    scale.tare();
-    Serial.println("Put the same weight back on and press ENTER.");
-    inByte = '\0';
-    while (inByte != '\n' && inByte != '\r') {
-      if (Serial.available() > 0) {
-        inByte = Serial.read();
-      }
-    }
+    //Serial.println("Take the weight off and press ENTER to tare.");
+    //inByte = '\0';
+    //while (inByte != '\n' && inByte != '\r') {
+    //  if (Serial.available() > 0) {
+    //    inByte = Serial.read();
+    //  }
+    //}
+    //scale.set_scale();
+    //scale.tare();
+    //Serial.println("Put the same weight back on and press ENTER.");
+    //inByte = '\0';
+    //while (inByte != '\n' && inByte != '\r') {
+    //  if (Serial.available() > 0) {
+    //    inByte = Serial.read();
+    //  }
+    //}
   }
 
   float mean_param = sum / total_samples;
   Serial.print("Average scale parameter: ");
-  Serial.println(uint32_t(mean_param));
+  Serial.println(mean_param);
+  int positive = 1;
+  if (mean_param < 0) {
+    positive = 0;
+    mean_param *= -1;
+  }
   Serial.println("Saving to internal memory");
   initFlash();
-  saveScaleParam(uint32_t(mean_param));
-  Serial.println("Validating saved parameter");
-  uint32_t read_param = readScaleParam();
+  saveScaleParam(uint32_t(mean_param), positive);
+  Serial.print("Validating saved parameter");
+  float read_param = readScaleParam();
+  Serial.print(" = ");
   Serial.println(read_param);
+}
+
+int countTarePresses() {
+  curr_time = millis();
+  prev_time = millis();
+  int count = 0;
+  int newState = LOW;
+  int oldState = LOW;
+  while (curr_time - prev_time < 1000) {
+    newState = digitalRead(tarePin);
+    if (newState != oldState) {
+      if (newState == LOW) {
+        // oldState is HIGH, so the button was pressed then released.
+        count += 1;
+      }
+      oldState = newState;
+    }
+    curr_time = millis();
+    delay(50);  // Debounce the button.
+  }
+  curr_time = millis();
+  prev_time = millis();
+
+  return count;
 }
 
 void setup() {
@@ -275,31 +332,36 @@ void setup() {
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
 
-  // At startup show green for 1s
-  // allowing user to press tare to enter calibration mode.
-  setColor(0, 255, 0);
-  setLedColor();
-  curr_time = millis();
-  prev_time = millis();
-  while (curr_time - prev_time < 1000) {
-    tareState = digitalRead(tarePin);
-    if (tareState == HIGH) {
-      doCalibrate = 1;
-    }
-    curr_time = millis();
-  }
-  curr_time = millis();
-  prev_time = millis();
-
-  if (doCalibrate == 1) {
+  // If tare held at startup, enter calibration mode.
+  tareState = digitalRead(tarePin);
+  if (tareState == HIGH) {
+    doCalibrate = 1;
     // white
     setColor(255, 255, 255);
     setLedColor();
-  } else { 
+  } else {
+    // At startup show green for 1s
+    // allowing user to press tare to enter different modes.
+    setColor(0, 255, 0);
+    setLedColor();
+    int num_presses = countTarePresses();
+
+    switch (num_presses) {
+      case 0:
+        WH06_MODE = 1;
+        break;
+      case 2:
+        Serial.println("TINDEQ_MODE not supported yet.");
+        Serial.println("Falling back to WH06_MODE.");
+        // TINDEQ_MODE = 1;
+        WH06_MODE = 1;
+        break;
+    }
     // light blue
     setColor(0, 175, 255);
     setLedColor();
   }
+
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // for nrf52840 with native usb
@@ -322,10 +384,11 @@ void setup() {
   }
 
   initFlash();
-  uint32_t scale_param = readScaleParam();
+  float scale_param = readScaleParam();
   debugPrint("Scale set to ");
-  debugPrintln(float(scale_param));
-  scale.set_scale(float(scale_param));
+  debugPrintln(scale_param);
+  scale.set_scale(scale_param);
+  //scale.set_scale();
   tare();
 
   // Start BLE

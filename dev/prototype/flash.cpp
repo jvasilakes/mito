@@ -33,36 +33,39 @@ Adafruit_FlashTransport_QSPI flashTransport;
 
 Adafruit_SPIFlash flash(&flashTransport);
 
-#define BUFSIZE   4  // Because we're converting between uint32_t and uint8_t[]
+#define BUFSIZE   4  // Because we're converting between int32_t and int8_t[]
 
 // 4 byte aligned buffer has best result with nRF QSPI
 uint8_t bufwrite[BUFSIZE] __attribute__ ((aligned(4)));
 uint8_t bufread[BUFSIZE] __attribute__ ((aligned(4)));
+uint8_t bufpos;
 
 void initFlash(void) {
   flash.begin(&P25Q16H, 1);
 }
 
-void saveScaleParam(uint32_t param) {
+void saveScaleParam(uint32_t param, uint8_t positive) {
   flash.eraseChip();
   flash.waitUntilReady();
   memcpy(bufwrite, &param, sizeof(param));
+
   flash.writeBuffer(0, bufwrite, sizeof(bufwrite));
+  flash.writeBuffer(sizeof(bufwrite), &positive, sizeof(positive));
 }
 
-uint32_t readScaleParam() {
+float readScaleParam() {
   flash.waitUntilReady();
   memset(bufread, 0, sizeof(bufread));
+  memset(&bufpos, 0, sizeof(bufpos));
   flash.readBuffer(0, bufread, sizeof(bufread));
+  flash.readBuffer(sizeof(bufread), &bufpos, sizeof(bufpos));
 
-  for (int i=0; i<BUFSIZE; i++) {
-    if (bufread[i] < 0x10) Serial.print('0');
-    Serial.print(bufread[i], HEX);
-    Serial.print(" ");
+  uint32_t base_value;
+  float value;
+  memcpy(&base_value, &bufread, sizeof(bufread));
+  value = float(base_value);
+  if (bufpos == 0) {
+    value *= -1;
   }
-  Serial.print(" = ");
-  uint32_t value;
-  memcpy(&value, &bufread, sizeof(bufread));
-  Serial.println(value);
   return value;
 }
