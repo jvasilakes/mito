@@ -1,8 +1,8 @@
 #include <string.h>
 #include <bluefruit.h>
 #include "Adafruit_TinyUSB.h"
-#include "HX711.h"
-#include "flash.h"
+#include "src/lib/HX711.h"
+#include "src/lib/flash.h"
 
 // Indices in the advertised data for things we plan to change.
 #define SCALE_DATA_LEN           19   // See scale_data init below.
