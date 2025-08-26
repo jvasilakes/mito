@@ -3,61 +3,43 @@
 #include "Adafruit_TinyUSB.h"
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
-
-// Indices in the advertised data for things we plan to change.
-#define SCALE_DATA_LEN           19   // See scale_data init below.
-#define SCALE_DATA_WEIGHT_INT    12   // The integer part
-#define SCALE_DATA_WEIGHT_FRAC   13   // The fractional part
-#define SCALE_DATA_TIMESTAMP_MSB 17
-#define SCALE_DATA_TIMESTAMP_LSB 18
+#include "src/lib/scales.h"
 
 int WH06_MODE = 1;
 
 // Alternative program states.
 // set to 1 in setup() if tare button is pressed
-int doCalibrate = 0;  // 1 time during startup.
-int debug = 1;        // 3 times during startup.
+bool doCalibrate = 0;  // 1 time during startup.
+bool debug = 1;        // 3 times during startup.
 
 // Tare button
-const int tarePin = 7;  // the tare button
+const uint8_t tarePin = 7;  // the tare button
 
 // RGB LED
-const int redPin = 6;    // the number of the LED pin
-const int greenPin = 5;    // the number of the LED pin
-const int bluePin = 4;    // the number of the LED pin
+const uint8_t redPin = 6;    // the number of the LED pin
+const uint8_t greenPin = 5;    // the number of the LED pin
+const uint8_t bluePin = 4;    // the number of the LED pin
 
 // Load Cell
 const uint8_t LOADCELL_DOUT_PIN = 9;
 const uint8_t LOADCELL_SCK_PIN = 10;
-const int LOADCELL_GAIN = 128;
+const uint8_t LOADCELL_GAIN = 128;
 
-int tareState = 0;  // tare button push state.
+bool tareState = 0;  // tare button push state.
 
 // Current LED color
 uint8_t color[3] = {0,0,0};
 
-// Data to be advertised by the scale.
-// Currently spoofing the data put out by the WH-06.
-uint8_t scale_data[SCALE_DATA_LEN] = {
-  0x00,0x01,  // 0, 1: TomTom industries lol
-  0x02,0x03,0x11,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,  // 2-10: idk but seems to the be MAC?
-  0x01,  // 11: 01 for kg, 00 for lbs
-  0x00,0x00,  // 12, 13: weight in g/10 as uint16_t
-  0x01,0xF4,  // 14, 15: idk it never changes.
-  0x01,       // 16: 01 for kg, 00 for lbs, A1 for kg (hold), A0 for lbs (hold)
-  0x99,0x90   // 17, 18: timestamp as uint16_t
-};
-
 // Parameter for Exponential Moving Average
 uint32_t EMA_ALPHA = 30;
 long reading = 0;  // For computing exponential moving average.
-long smoothed_reading = 0;  // For computing exponential moving average.
-long weight = 0;  // Current weight reading in hectograms.
+uint32_t smoothed_reading = 0;  // For computing exponential moving average.
+uint32_t weight = 0;  // Current weight reading in hectograms.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
 
-int num_samples = 0;
-int hz = 0;  // For measuring HX711 speed.
+uint16_t num_samples = 0;
+uint16_t hz = 0;  // For measuring HX711 speed.
 HX711 scale;
 
 
@@ -101,9 +83,9 @@ void advertiseData(void)
 {
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   // This is necessary, as the Frez app looks for this name to connect to.
-  Bluefruit.setName("IF_B7");
+  Bluefruit.setName(WH06::DEVICE_NAME);
   Bluefruit.Advertising.addName();
-  Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
+  Bluefruit.Advertising.addManufacturerData(&WH06::scale_data, WH06::SCALE_DATA_LEN);
 
   /* Start Advertising
    * We go fast since the frez app takes all data from 
@@ -172,29 +154,12 @@ int getWeight(void)
   return rval;
 }
 
-void updateWeight(uint32_t grams)
-{
-  uint8_t msb = ((weight * 10) & 0xFF00U) >> 8U;
-  uint8_t lsb = ((weight * 10) & 0x00FFU);
-  scale_data[SCALE_DATA_WEIGHT_INT] = msb;
-  scale_data[SCALE_DATA_WEIGHT_FRAC] = lsb;
-}
-
-void updateTimestamp(uint16_t time)
-{
-  // Update the scale_data with the current timestamp.
-  uint8_t msb = (time & 0xFF00U) >> 8U;
-  uint8_t lsb = (time & 0x00FFU);
-  scale_data[SCALE_DATA_TIMESTAMP_MSB] = msb;
-  scale_data[SCALE_DATA_TIMESTAMP_LSB] = lsb;
-}
-
 void updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
   Bluefruit.Advertising.clearData();
   Bluefruit.Advertising.addName();
-  Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
+  Bluefruit.Advertising.addManufacturerData(&WH06::scale_data, WH06::SCALE_DATA_LEN);
 }
 
 template <typename T>
@@ -412,13 +377,9 @@ void loop() {
   //int got_weight = getWeightFiltered();
   if (got_weight == 1) {
     curr_time = millis();
-    updateWeight(weight);
-    updateTimestamp(curr_time);
+    WH06::updateWeight(weight);
+    WH06::updateTimestamp(curr_time);
     updateAdvData();
-    uint8_t wmsb = scale_data[SCALE_DATA_WEIGHT_INT];
-    uint8_t wlsb = scale_data[SCALE_DATA_WEIGHT_FRAC];
-    uint8_t tmsb = scale_data[SCALE_DATA_TIMESTAMP_MSB];
-    uint8_t tlsb = scale_data[SCALE_DATA_TIMESTAMP_LSB];
     num_samples += 1;
   }
 
