@@ -19,7 +19,7 @@ int doCalibrate = 0;  // 1 time during startup.
 int debug = 1;        // 3 times during startup.
 
 // Tare button
-const int tarePin = 10;  // the tare button
+const int tarePin = 7;  // the tare button
 
 // RGB LED
 const int redPin = 6;    // the number of the LED pin
@@ -28,7 +28,7 @@ const int bluePin = 4;    // the number of the LED pin
 
 // Load Cell
 const uint8_t LOADCELL_DOUT_PIN = 9;
-const uint8_t LOADCELL_SCK_PIN = 8;
+const uint8_t LOADCELL_SCK_PIN = 10;
 const int LOADCELL_GAIN = 128;
 
 int tareState = 0;  // tare button push state.
