@@ -1,5 +1,4 @@
 #include <string.h>
-#include <bluefruit.h>
 #include "Adafruit_TinyUSB.h"
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
@@ -34,13 +33,15 @@ uint8_t color[3] = {0,0,0};
 uint32_t EMA_ALPHA = 30;
 long reading = 0;  // For computing exponential moving average.
 uint32_t smoothed_reading = 0;  // For computing exponential moving average.
-uint32_t weight = 0;  // Current weight reading in hectograms.
+uint32_t weight = 50;  // Current weight reading in hectograms.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
 
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
 HX711 scale;
+//WH06 device;
+Tindeq device;
 
 
 void setColor(uint8_t red, uint8_t green, uint8_t blue)
@@ -79,28 +80,11 @@ void flashLED(void)
   }
 }
 
-void advertiseData(void)
-{
-  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  // This is necessary, as the Frez app looks for this name to connect to.
-  Bluefruit.setName(WH06::DEVICE_NAME);
-  Bluefruit.Advertising.addName();
-  Bluefruit.Advertising.addManufacturerData(&WH06::scale_data, WH06::SCALE_DATA_LEN);
-
-  /* Start Advertising
-   * We go fast since the frez app takes all data from 
-   * the advertisement. */
-  Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 32);    // in unit of 0.625 ms, so 32=20ms
-  Bluefruit.Advertising.setFastTimeout(0);      // always advertise at 32.
-  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising.
-}
-
 void tare(void)
 {
   debugPrintln("Taring...");
   scale.tare();
-  weight = 0;
+  weight = 50;
   flashLED();
 }
 
@@ -142,7 +126,7 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(scale.SCALE);
   debugPrint(",");
-  weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
+  //weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
   debugPrint(midr);
   debugPrint(",");
   debugPrint(smoothed_reading);
@@ -152,14 +136,6 @@ int getWeight(void)
   debugPrintln(hz);
   //delay(1000);
   return rval;
-}
-
-void updateAdvData(void)
-{
-  // Update the advertisement with the current scale data.
-  Bluefruit.Advertising.clearData();
-  Bluefruit.Advertising.addName();
-  Bluefruit.Advertising.addManufacturerData(&WH06::scale_data, WH06::SCALE_DATA_LEN);
 }
 
 template <typename T>
@@ -348,6 +324,7 @@ void setup() {
     setLedColor();
   }
 
+  // Set the SCALE.
   initFlash();
   float scale_param = readScaleParam();
   debugPrint("Scale set to ");
@@ -357,9 +334,7 @@ void setup() {
   tare();
 
   // Start BLE
-  Bluefruit.begin();
-  //Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
-  advertiseData();
+  device.begin();
   debugPrintln("BLE Advertising");
 }
 
@@ -377,9 +352,9 @@ void loop() {
   //int got_weight = getWeightFiltered();
   if (got_weight == 1) {
     curr_time = millis();
-    WH06::updateWeight(weight);
-    WH06::updateTimestamp(curr_time);
-    updateAdvData();
+    device.updateWeight(weight);
+    device.updateTimestamp(curr_time);
+    device.updateAdvData();
     num_samples += 1;
   }
 
