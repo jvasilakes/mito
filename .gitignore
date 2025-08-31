@@ -1,4 +1,5 @@
-mito-backups
+mito-backups/*
+hardware/fp-info-cache
 
 # Prerequisites
 *.d

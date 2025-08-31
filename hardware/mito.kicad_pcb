@@ -5612,7 +5612,7 @@
 			(uuid "755d8e9a-e4ac-4691-ac88-aa4758390787")
 		)
 		(embedded_fonts no)
-		(model "/home/jav/Downloads/XIAO-nRF52840 v3.step"
+		(model "/home/jav/Documents/KiCAD/3dmodels/XIAO-nRF52840 v3.step"
 			(offset
 				(xyz 6.05 -1.75 0)
 			)
