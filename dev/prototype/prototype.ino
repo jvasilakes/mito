@@ -4,7 +4,8 @@
 #include "src/lib/flash.h"
 #include "src/lib/scales.h"
 
-int WH06_MODE = 1;
+int SCALE_MODE = 0;  // WH06
+// int SCALE_MODE = 1;  // Tindeq
 
 // Alternative program states.
 // set to 1 in setup() if tare button is pressed
@@ -15,9 +16,9 @@ bool debug = 1;        // 3 times during startup.
 const uint8_t tarePin = 7;  // the tare button
 
 // RGB LED
-const uint8_t redPin = 6;    // the number of the LED pin
+const uint8_t redPin = 4;    // the number of the LED pin
 const uint8_t greenPin = 5;    // the number of the LED pin
-const uint8_t bluePin = 4;    // the number of the LED pin
+const uint8_t bluePin = 6;    // the number of the LED pin
 
 // Load Cell
 const uint8_t LOADCELL_DOUT_PIN = 9;
@@ -40,9 +41,7 @@ uint16_t curr_time = 0;  // Current time stamp
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
 HX711 scale;
-//WH06 device;
-Tindeq device;
-
+Device* device = nullptr;
 
 void setColor(uint8_t red, uint8_t green, uint8_t blue)
 {
@@ -289,20 +288,20 @@ void setup() {
 
     switch (num_presses) {
       case 0:
-        WH06_MODE = 1;
+        SCALE_MODE = 0;
+        // light blue
+        device = new WH06();
+        setColor(0, 200, 255);
         break;
       case 2:
-        Serial.println("TINDEQ_MODE not supported yet.");
-        Serial.println("Falling back to WH06_MODE.");
-        // TINDEQ_MODE = 1;
-        WH06_MODE = 1;
+        SCALE_MODE = 1;  // Tindeq
+        device = new Tindeq();
+        // yellow
+        setColor(255, 255, 0);
         break;
     }
-    // light blue
-    setColor(0, 175, 255);
     setLedColor();
   }
-
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // for nrf52840 with native usb
@@ -334,7 +333,7 @@ void setup() {
   tare();
 
   // Start BLE
-  device.begin();
+  device->begin();
   debugPrintln("BLE Advertising");
 }
 
@@ -352,9 +351,9 @@ void loop() {
   //int got_weight = getWeightFiltered();
   if (got_weight == 1) {
     curr_time = millis();
-    device.updateWeight(weight);
-    device.updateTimestamp(curr_time);
-    device.updateAdvData();
+    device->updateWeight(weight);
+    device->updateTimestamp(curr_time);
+    device->updateAdvData();
     num_samples += 1;
   }
 

@@ -5,6 +5,8 @@
  ************* WH06 ************
 *******************************/
 
+extern WH06 device;
+
 void WH06::updateWeight(uint32_t weight)
 {
   uint8_t msb = ((weight * 10) & 0xFF00U) >> 8U;
@@ -78,13 +80,15 @@ void Tindeq::advertiseData(void)
 void Tindeq::updateWeight(uint32_t weight)
 {
   memcpy(&scale_data[2], &weight, sizeof(uint32_t));
-  for (int i=0; i<4; i++) {
-    printf("0x02X", scale_data[2+i]);
+  //for (int i=0; i<4; i++) {
+  //  printf("0x02X", scale_data[2+i]);
+  //}
 }
 
-void Tindeq::updateTimestamp(uint32_t time)
+void Tindeq::updateTimestamp(uint16_t time)
 {
-  memcpy(&scale_data[6], &time, sizeof(uint32_t));
+  uint32_t upcast_time = static_cast<uint32_t>(time);
+  memcpy(&scale_data[6], &upcast_time, sizeof(uint32_t));
 }
 
 void Tindeq::updateAdvData(void)

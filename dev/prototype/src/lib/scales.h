@@ -1,11 +1,25 @@
 #ifndef SCALES_h
 #define SCALES_h
 
+#pragma once
+
 #include <Arduino.h>
 #include <bluefruit.h>
 
 
-class WH06
+class Device
+{
+  public:
+    virtual void begin(void);
+    virtual void updateWeight(uint32_t weight);
+    virtual void updateTimestamp(uint16_t time);
+    virtual void advertiseData(void);
+    virtual void updateAdvData(void);
+    virtual ~Device() {};
+};
+
+
+class WH06 : public Device
 {
   private:
     // Indices in the advertised data for things we plan to change.
@@ -27,20 +41,20 @@ class WH06
       0x99,0x90   // 17, 18: timestamp as uint16_t
     };
 
-  // Update the scale_data with the current weight reading.
-  void updateWeight(uint32_t weight);
+    // Update the scale_data with the current weight reading.
+    void updateWeight(uint32_t weight) override;
 
-  // Update the scale_data timestamp.
-  void updateTimestamp(uint16_t time);
+    // Update the scale_data timestamp.
+    void updateTimestamp(uint16_t time) override;
 
-  // Setup and start BLE advertising.
-  void begin(void);
-  void advertiseData(void);
-  void updateAdvData(void);
+    // Setup and start BLE advertising.
+    void begin(void) override;
+    void advertiseData(void) override;
+    void updateAdvData(void) override;
 };
 
 
-class Tindeq
+class Tindeq : public Device
 {
   private:
     const uint8_t progressor_service_uuid128[16] = {
@@ -65,16 +79,16 @@ class Tindeq
   public:
     const char DEVICE_NAME[11] = "Progressor";
 
-  // Update the scale_data with the current weight reading.
-  void updateWeight(uint32_t weight);
+    // Update the scale_data with the current weight reading.
+    void updateWeight(uint32_t weight) override;
 
-  // Update the scale_data timestamp.
-  void updateTimestamp(uint32_t time);
+    // Update the scale_data timestamp.
+    void updateTimestamp(uint16_t time) override;
 
-  // Setup and start BLE advertising.
-  void begin(void);
-  void advertiseData(void);
-  void updateAdvData(void);
+    // Setup and start BLE advertising.
+    void begin(void) override;
+    void advertiseData(void) override;
+    void updateAdvData(void) override;
 };
 
 #endif  /* SCALES_h */
