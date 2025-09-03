@@ -488,7 +488,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "/home/jav/Documents/KiCAD/mito/gerber/",
+      "plot": "/home/jav/Documents/Projects/cruxtools/mito/hardware/gerber/",
       "pos_files": "/home/jav/Documents/KiCAD/mito/fabrication/",
       "specctra_dsn": "",
       "step": "mito.step",
