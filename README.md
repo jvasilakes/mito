@@ -2,7 +2,7 @@
 
 A small, cheap, and completely open-source force gauge to rival the Tindeq and Forceboard.
 
-![Mito PCB](https://github.com/jvasilakes/mito/tree/master/hardware/mito.png)
+![Mito PCB](https://github.com/jvasilakes/mito/blob/master/hardware/mito.png?raw=true)
 
 
 ## Building the firmware
