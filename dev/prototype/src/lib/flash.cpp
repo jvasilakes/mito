@@ -33,39 +33,63 @@ Adafruit_FlashTransport_QSPI flashTransport;
 
 Adafruit_SPIFlash flash(&flashTransport);
 
-#define BUFSIZE   4  // Because we're converting between int32_t and int8_t[]
+/* Size of the scale param. 4 because we're converting
+ * between int32_t and int8_t[] */
+#define BUFSIZE          4  
+#define PARAM_ADDR       0  // Address of the scale param
+#define PARAM_SIGN_ADDR  4  // PARAM_ADDR + BUFSIZE
+#define DEVICE_CODE_ADDR 5  // PARAM_SIGN_ADDR + 1
 
 // 4 byte aligned buffer has best result with nRF QSPI
-uint8_t bufwrite[BUFSIZE] __attribute__ ((aligned(4)));
-uint8_t bufread[BUFSIZE] __attribute__ ((aligned(4)));
-uint8_t bufpos;
+uint8_t param_bufwrite[BUFSIZE] __attribute__ ((aligned(4)));
+uint8_t param_bufread[BUFSIZE] __attribute__ ((aligned(4)));
+uint8_t param_bufpos;
+uint8_t device_code_buf;
 
-void initFlash(void) {
+void initFlash(void)
+{
   flash.begin(&P25Q16H, 1);
 }
 
-void saveScaleParam(uint32_t param, uint8_t positive) {
-  flash.eraseChip();
-  flash.waitUntilReady();
-  memcpy(bufwrite, &param, sizeof(param));
+void saveScaleParam(uint32_t param, uint8_t positive)
+{
+  memcpy(param_bufwrite, &param, sizeof(param));
 
-  flash.writeBuffer(0, bufwrite, sizeof(bufwrite));
-  flash.writeBuffer(sizeof(bufwrite), &positive, sizeof(positive));
+  flash.waitUntilReady();
+  flash.writeBuffer(PARAM_ADDR, param_bufwrite, sizeof(param_bufwrite));
+  flash.writeBuffer(sizeof(param_bufwrite), &positive, sizeof(positive));
 }
 
-float readScaleParam() {
+float readScaleParam(void)
+{
+  memset(param_bufread, 0, sizeof(param_bufread));
+  memset(&param_bufpos, 0, sizeof(param_bufpos));
+
   flash.waitUntilReady();
-  memset(bufread, 0, sizeof(bufread));
-  memset(&bufpos, 0, sizeof(bufpos));
-  flash.readBuffer(0, bufread, sizeof(bufread));
-  flash.readBuffer(sizeof(bufread), &bufpos, sizeof(bufpos));
+  flash.readBuffer(PARAM_ADDR, param_bufread, sizeof(param_bufread));
+  flash.readBuffer(PARAM_SIGN_ADDR, &param_bufpos, sizeof(param_bufpos));
 
   uint32_t base_value;
   float value;
-  memcpy(&base_value, &bufread, sizeof(bufread));
+  memcpy(&base_value, &param_bufread, sizeof(param_bufread));
   value = float(base_value);
-  if (bufpos == 0) {
+  if (param_bufpos == 0) {
     value *= -1;
   }
   return value;
+}
+
+void saveDefaultDevice(uint8_t device_code)
+{
+  flash.waitUntilReady();
+  flash.writeBuffer(DEVICE_CODE_ADDR, &device_code, sizeof(device_code));
+}
+
+uint8_t readDefaultDevice(void)
+{
+  memset(&device_code_buf, 0, sizeof(device_code_buf));
+  flash.waitUntilReady();
+  flash.readBuffer(DEVICE_CODE_ADDR, &device_code_buf, sizeof(device_code_buf));
+  // TODO: Return WH06 (code 1) if no device currently saved in memory.
+  return device_code_buf;
 }

@@ -79,10 +79,8 @@ void Tindeq::advertiseData(void)
 
 void Tindeq::updateWeight(uint32_t weight)
 {
-  memcpy(&scale_data[2], &weight, sizeof(uint32_t));
-  //for (int i=0; i<4; i++) {
-  //  printf("0x02X", scale_data[2+i]);
-  //}
+  float f_weight = static_cast<float>(weight);
+  memcpy(&scale_data[2], &weight, sizeof(float));
 }
 
 void Tindeq::updateTimestamp(uint16_t time)

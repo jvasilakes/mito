@@ -4,62 +4,68 @@
 #include "src/lib/flash.h"
 #include "src/lib/scales.h"
 
-int SCALE_MODE = 0;  // WH06
-// int SCALE_MODE = 1;  // Tindeq
 
-// Alternative program states.
-// set to 1 in setup() if tare button is pressed
-bool doCalibrate = 0;  // 1 time during startup.
-bool debug = 1;        // 3 times during startup.
+/* Set in setup() */
+uint8_t DEVICE_CODE;
+// int DEVICE_CODE = 0;  // WH06
+// int DEVICE_CODE = 1;  // Tindeq
+int NUM_DEVICES = 2;
+
+bool doCalibrate = 0;  // Tare button pressed at startup.
+bool debug = 0;
+//bool debug = 1;
 
 // Tare button
 const uint8_t tarePin = 7;  // the tare button
+bool tareState = 0;  // tare button push state.
 
-// RGB LED
+// RGB LED pins
 const uint8_t redPin = 4;    // the number of the LED pin
 const uint8_t greenPin = 5;    // the number of the LED pin
 const uint8_t bluePin = 6;    // the number of the LED pin
+// Current LED color
+uint8_t color[3] = {0,0,0};
 
-// Load Cell
+// Load Cell parameters
 const uint8_t LOADCELL_DOUT_PIN = 9;
 const uint8_t LOADCELL_SCK_PIN = 10;
 const uint8_t LOADCELL_GAIN = 128;
 
-bool tareState = 0;  // tare button push state.
-
-// Current LED color
-uint8_t color[3] = {0,0,0};
-
 // Parameter for Exponential Moving Average
 uint32_t EMA_ALPHA = 30;
+
+// Global Variables
 long reading = 0;  // For computing exponential moving average.
 uint32_t smoothed_reading = 0;  // For computing exponential moving average.
 uint32_t weight = 50;  // Current weight reading in hectograms.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
-
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
-HX711 scale;
-Device* device = nullptr;
+HX711 scale;  // The ADC
+Device* device = nullptr;  // The overall device: WH06, Tindeq
 
-void setColor(uint8_t red, uint8_t green, uint8_t blue)
-{
-  color[0] = red;
-  color[1] = green;
-  color[2] = blue;
-}
 
-void setLedColor(void)
+void setLEDColor(uint8_t red, uint8_t green, uint8_t blue)
 {
   // Set the LED color based on RGB values.
   // Assumes common anode RGB LED
-  digitalWrite(redPin, 255 - color[0]);
-  digitalWrite(greenPin, 255 - color[1]);
-  digitalWrite(bluePin, 255 - color[2]);
+  digitalWrite(redPin, 255 - red);
+  digitalWrite(greenPin, 255 - green);
+  digitalWrite(bluePin, 255 - blue);
 }
 
-void turnOff(void)
+
+uint8_t* getLEDColor(void)
+{
+  uint8_t* rgb = new uint8_t[3];
+  rgb[0] = 255 - digitalRead(redPin); 
+  rgb[1] = 255 - digitalRead(greenPin); 
+  rgb[2] = 255 - digitalRead(bluePin); 
+  return rgb;
+}
+
+void turnOffLED(void)
 {
   // Turn off the LED.
   digitalWrite(redPin, HIGH);
@@ -69,14 +75,16 @@ void turnOff(void)
 
 void flashLED(void)
 {
-  // Flash the LED on and off with the specified color.
+  // Flash the LED on and off with the current color.
   // Used to indicate tare.
+  uint8_t* rgb = getLEDColor();
   for (int i=0; i<3; i++) {
-    turnOff();
+    turnOffLED();
     delay(100);
-    setLedColor();
+    setLEDColor(rgb[0], rgb[1], rgb[2]);
     delay(100);
   }
+  delete[] rgb;
 }
 
 void tare(void)
@@ -153,7 +161,8 @@ void debugPrintln(T msg)
   }
 }
 
-void calibrate(void) {
+void calibrate(void)
+{
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
@@ -226,7 +235,7 @@ void calibrate(void) {
   float mean_param = sum / total_samples;
   Serial.print("Average scale parameter: ");
   Serial.println(mean_param);
-  int positive = 1;
+  int positive = 1;  // 1 for positive param, 0 for negative.
   if (mean_param < 0) {
     positive = 0;
     mean_param *= -1;
@@ -240,13 +249,16 @@ void calibrate(void) {
   Serial.println(read_param);
 }
 
-int countTarePresses() {
+/* Count the number of times the tare button
+   is pressed within a millisecond window */
+int countTarePresses(int window)
+{
   curr_time = millis();
   prev_time = millis();
   int count = 0;
   int newState = LOW;
   int oldState = LOW;
-  while (curr_time - prev_time < 1000) {
+  while (curr_time - prev_time < window) {
     newState = digitalRead(tarePin);
     if (newState != oldState) {
       if (newState == LOW) {
@@ -264,7 +276,8 @@ int countTarePresses() {
   return count;
 }
 
-void setup() {
+void setup()
+{
   // initialize the tare button.
   pinMode(tarePin, INPUT);
   // initialize the LED.
@@ -276,36 +289,59 @@ void setup() {
   tareState = digitalRead(tarePin);
   if (tareState == HIGH) {
     doCalibrate = 1;
-    // white
-    setColor(255, 255, 255);
-    setLedColor();
+    setLEDColor(255, 255, 255);  // white
   } else {
-    // At startup show green for 1s
+    initFlash();
+    DEVICE_CODE = readDefaultDevice();
+    // At startup/after calibration, show green for 1s
     // allowing user to press tare to enter different modes.
-    setColor(0, 255, 0);
-    setLedColor();
-    int num_presses = countTarePresses();
-
-    switch (num_presses) {
-      case 0:
-        SCALE_MODE = 0;
-        // light blue
-        device = new WH06();
-        setColor(0, 200, 255);
-        break;
-      case 2:
-        SCALE_MODE = 1;  // Tindeq
-        device = new Tindeq();
-        // yellow
-        setColor(255, 255, 0);
-        break;
+    setLEDColor(0, 255, 0);  // green
+    int num_presses = countTarePresses(1000);
+    if (num_presses > 0) {
+      /* If tare pressed, enter device selection */
+      flashLED();
+      uint8_t curr_device = 0;  // WH06
+      while (1) {
+        switch (curr_device) {
+          case 0:  // WH06
+            setLEDColor(0, 200, 255);  // light blue
+            break;
+          case 1:  // Tindeq
+            setLEDColor(255, 255, 0);  // yellow
+            break;
+        }
+        num_presses = countTarePresses(1000);
+        if (num_presses == 1) {
+          // Go to the next device.
+          curr_device = (curr_device + 1) % NUM_DEVICES;
+        } else if (num_presses == 2) {
+          // Save the current device as default and exit the loop.
+          DEVICE_CODE = curr_device;
+          flashLED();
+          saveDefaultDevice(DEVICE_CODE);
+          break;
+        }
+      }
     }
-    setLedColor();
   }
 
-  Serial.begin(115200);
-  while ( !Serial ) delay(10);   // for nrf52840 with native usb
-  Serial.println("Starting.");
+  // Initialize the device.
+  switch (DEVICE_CODE) {
+    case 0:
+      setLEDColor(0, 200, 255);  // light blue
+      device = new WH06();
+      break;
+    case 1:
+      setLEDColor(255, 255, 0);  // yellow
+      device = new Tindeq();
+      break;
+  }
+
+  if (debug == 1) {
+    Serial.begin(115200);
+    while ( !Serial ) delay(10);   // for nrf52840 with native usb
+    Serial.println("Starting.");
+  }
   // Initialize the scale
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
   delay(250);
@@ -314,17 +350,16 @@ void setup() {
   if (scale.wait_ready_timeout(1000)) {
     debugPrintln("HX711 found");
   }
-  scale.set_gain(64);
+  scale.set_gain(LOADCELL_GAIN);
 
   if (doCalibrate == 1) {
+    uint8_t* rgb = getLEDColor();
     calibrate();
-    // light blue
-    setColor(0, 175, 255);
-    setLedColor();
+    setLEDColor(rgb[0], rgb[1], rgb[2]);
+    delete[] rgb;
   }
 
   // Set the SCALE.
-  initFlash();
   float scale_param = readScaleParam();
   debugPrint("Scale set to ");
   debugPrintln(scale_param);
