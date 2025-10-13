@@ -27,6 +27,7 @@ void WH06::updateTimestamp(uint16_t time)
 void WH06::advertiseData(void)
 {
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  Bluefruit.Advertising.setType(BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED);
   // This is necessary, as the Frez app looks for this name to connect to.
   Bluefruit.setName(DEVICE_NAME);
   Bluefruit.Advertising.addName();
@@ -46,6 +47,13 @@ void WH06::updateAdvData(void)
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
 }
+
+/*********************************
+uint8_t* WH06::getScaleData(void)
+{
+  return &scale_data;
+}
+*********************************/
 
 void WH06::begin(void)
 {
@@ -80,7 +88,7 @@ void Tindeq::advertiseData(void)
 void Tindeq::updateWeight(uint32_t weight)
 {
   float f_weight = static_cast<float>(weight);
-  memcpy(&scale_data[2], &weight, sizeof(float));
+  memcpy(&scale_data[2], &f_weight, sizeof(float));
 }
 
 void Tindeq::updateTimestamp(uint16_t time)

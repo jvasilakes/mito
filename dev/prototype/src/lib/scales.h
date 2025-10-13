@@ -15,6 +15,7 @@ class Device
     virtual void updateTimestamp(uint16_t time);
     virtual void advertiseData(void);
     virtual void updateAdvData(void);
+    //virtual uint8_t* getScaleData(void);
     virtual ~Device() {};
 };
 
@@ -27,8 +28,6 @@ class WH06 : public Device
     static const int SCALE_DATA_WEIGHT_FRAC = 13;     // The fractional part
     static const int SCALE_DATA_TIMESTAMP_MSB = 17;   // Most significant bit
     static const int SCALE_DATA_TIMESTAMP_LSB =  18;  // Least significant bit
-
-  public:
     static const int SCALE_DATA_LEN = 19;   // See scale_data init below.
     const char DEVICE_NAME[6] = "IF_B7";       // All WH06 devices have this name.    
     uint8_t scale_data[SCALE_DATA_LEN] = {
@@ -41,16 +40,17 @@ class WH06 : public Device
       0x99,0x90   // 17, 18: timestamp as uint16_t
     };
 
+  public:
     // Update the scale_data with the current weight reading.
     void updateWeight(uint32_t weight) override;
-
     // Update the scale_data timestamp.
     void updateTimestamp(uint16_t time) override;
-
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
     void updateAdvData(void) override;
+    // Getters and Setters
+    //uint8_t* getScaleData(void) override;
 };
 
 
@@ -58,25 +58,25 @@ class Tindeq : public Device
 {
   private:
     const uint8_t progressor_service_uuid128[16] = {
-      0x57, 0xad, 0x5e, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
-      0x40, 0xc9, 0x1e, 0xa6, 0x7e, 0x4e, 0x17, 0x01
+      0x57, 0xad, 0xfe, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
+      0xc9, 0x40, 0xa6, 0x1e, 0x01, 0x17, 0x4e, 0x7e
     };
     BLEService progressor = BLEService(progressor_service_uuid128);
 
     const uint8_t datapoint_characteristic_uuid128[16] = {
-      0x57, 0xad, 0x5e, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
-      0x40, 0xc9, 0x1e, 0xa6, 0x7e, 0x4e, 0x17, 0x02
+      0x57, 0xad, 0xfe, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
+      0xc9, 0x40, 0xa6, 0x1e, 0x02, 0x17, 0x4e, 0x7e
     };
     BLECharacteristic datapoint = BLECharacteristic(datapoint_characteristic_uuid128);
 
+  public:
     uint8_t scale_data[10] = {
       0x01, // Response code: weight measurement
       0x08,                   // length
-      0x00, 0x00, 0x00, 0x10, // weight
-      0x00, 0x00, 0x00, 0x00  // timestamp
+      0x00, 0x00, 0x00, 0x00, // weight float32
+      0x00, 0x00, 0x00, 0x00  // timestamp uint32_t
     };
 
-  public:
     const char DEVICE_NAME[11] = "Progressor";
 
     // Update the scale_data with the current weight reading.

@@ -12,12 +12,18 @@ uint8_t DEVICE_CODE;
 int NUM_DEVICES = 2;
 
 bool doCalibrate = 0;  // Tare button pressed at startup.
-bool debug = 0;
-//bool debug = 1;
 
 // Tare button
 const uint8_t tarePin = 7;  // the tare button
 bool tareState = 0;  // tare button push state.
+
+// External button
+const uint8_t buttonPin = 0;
+bool buttonState = 0;
+
+// Debug pin. If grounded enter debug mode.
+const uint8_t debugPin = 3;
+bool debug = 0;
 
 // RGB LED pins
 const uint8_t redPin = 4;    // the number of the LED pin
@@ -37,7 +43,7 @@ uint32_t EMA_ALPHA = 30;
 // Global Variables
 long reading = 0;  // For computing exponential moving average.
 uint32_t smoothed_reading = 0;  // For computing exponential moving average.
-uint32_t weight = 50;  // Current weight reading in hectograms.
+uint32_t weight = 0;  // Current weight reading in hectograms.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
 uint16_t num_samples = 0;
@@ -91,7 +97,6 @@ void tare(void)
 {
   debugPrintln("Taring...");
   scale.tare();
-  weight = 50;
   flashLED();
 }
 
@@ -133,7 +138,13 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(scale.SCALE);
   debugPrint(",");
-  //weight = (smoothed_reading - scale.OFFSET) / scale.SCALE;
+  int numerator; 
+  if (smoothed_reading < scale.OFFSET) {
+    numerator = 0;
+  } else {
+    numerator = smoothed_reading - scale.OFFSET;
+  }
+  weight = numerator / scale.SCALE;
   debugPrint(midr);
   debugPrint(",");
   debugPrint(smoothed_reading);
@@ -148,7 +159,7 @@ int getWeight(void)
 template <typename T>
 void debugPrint(T msg)
 {
-  if (debug == true) {
+  if (debug == 1) {
     Serial.print(msg);
   }
 }
@@ -156,7 +167,7 @@ void debugPrint(T msg)
 template <typename T>
 void debugPrintln(T msg)
 {
-  if (debug == true) {
+  if (debug == 1) {
     Serial.println(msg);
   }
 }
@@ -280,10 +291,17 @@ void setup()
 {
   // initialize the tare button.
   pinMode(tarePin, INPUT);
+  pinMode(buttonPin, INPUT);
+  pinMode(debugPin, INPUT_PULLUP);
   // initialize the LED.
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
+
+  bool debugState = digitalRead(debugPin);
+  if (debugState == LOW) {
+    debug = 1;
+  }
 
   // If tare held at startup, enter calibration mode.
   tareState = digitalRead(tarePin);
@@ -378,6 +396,23 @@ void loop() {
   if (tareState == HIGH) {
     tare();
   }
+
+  //buttonState = digitalRead(buttonPin);
+  //if (buttonState == HIGH) {
+  //  weight += 1;
+  //} else {
+  //  if (weight > 0) {
+  //    weight -= 1;
+  //  }
+  //}
+  //debugPrint(weight);
+  //debugPrint(",");
+  //debugPrint(buttonState);
+  //debugPrint(",");
+  //for (int i=2; i<6; i++) {
+  //  debugPrint(device->getScaleData()[i]);
+  //}
+  //debugPrintln("");
 
   // Update the advertisement every time we get a new weight.
   // This is 10Hz by default on the HX711, but can be increased
