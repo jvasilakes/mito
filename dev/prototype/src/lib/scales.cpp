@@ -88,6 +88,8 @@ void Tindeq::advertiseData(void)
 void Tindeq::updateWeight(uint32_t weight)
 {
   float f_weight = static_cast<float>(weight);
+  // Because the int weight is encoded as grams.
+  f_weight = f_weight / 10;
   memcpy(&scale_data[2], &f_weight, sizeof(float));
 }
 

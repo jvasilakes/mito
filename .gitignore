@@ -2,6 +2,7 @@ hardware/mito-backups/*
 hardware/fp-info-cache
 *.lck
 dev/prototype/build/
+*.FCBak
 
 # Prerequisites
 *.d

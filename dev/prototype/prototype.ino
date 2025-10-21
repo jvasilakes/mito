@@ -5,6 +5,8 @@
 #include "src/lib/scales.h"
 
 
+#define SLEEP_TIMEOUT 60000
+
 /* Set in setup() */
 uint8_t DEVICE_CODE;
 // int DEVICE_CODE = 0;  // WH06
@@ -43,11 +45,15 @@ uint32_t EMA_ALPHA = 30;
 // Global Variables
 long reading = 0;  // For computing exponential moving average.
 uint32_t smoothed_reading = 0;  // For computing exponential moving average.
-uint32_t weight = 0;  // Current weight reading in hectograms.
+uint32_t weight = 0;  // Current weight reading in grams.
+uint32_t prev_weight = 0;  // Previous weight reading in grams.
+bool weight_changed = 0;  // To keep track of sleep timeout.
 uint16_t prev_time = 0;  // To measure increments without delay() 
 uint16_t curr_time = 0;  // Current time stamp
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
+uint32_t sleepTimeoutStart = 0;
+bool is_charging = 0;
 HX711 scale;  // The ADC
 Device* device = nullptr;  // The overall device: WH06, Tindeq
 
@@ -131,13 +137,7 @@ int getWeight(void)
     smoothed_reading = midr;
   }
   // Exponential moving average filter.
-  debugPrint(smoothed_reading);
-  debugPrint(",");
   smoothed_reading = ((EMA_ALPHA * midr) + ((100 - EMA_ALPHA) * smoothed_reading))/100;
-  debugPrint(scale.OFFSET);
-  debugPrint(",");
-  debugPrint(scale.SCALE);
-  debugPrint(",");
   int numerator; 
   if (smoothed_reading < scale.OFFSET) {
     numerator = 0;
@@ -145,14 +145,18 @@ int getWeight(void)
     numerator = smoothed_reading - scale.OFFSET;
   }
   weight = numerator / scale.SCALE;
-  debugPrint(midr);
-  debugPrint(",");
+
   debugPrint(smoothed_reading);
+  debugPrint(",");
+  debugPrint(scale.OFFSET);
+  debugPrint(",");
+  debugPrint(scale.SCALE);
+  debugPrint(",");
+  debugPrint(midr);
   debugPrint(",");
   debugPrint(weight);
   debugPrint(",");
   debugPrintln(hz);
-  //delay(1000);
   return rval;
 }
 
@@ -225,22 +229,6 @@ void calibrate(void)
       Serial.println(scale_param);
       delay(250);
     }
-    //Serial.println("Take the weight off and press ENTER to tare.");
-    //inByte = '\0';
-    //while (inByte != '\n' && inByte != '\r') {
-    //  if (Serial.available() > 0) {
-    //    inByte = Serial.read();
-    //  }
-    //}
-    //scale.set_scale();
-    //scale.tare();
-    //Serial.println("Put the same weight back on and press ENTER.");
-    //inByte = '\0';
-    //while (inByte != '\n' && inByte != '\r') {
-    //  if (Serial.available() > 0) {
-    //    inByte = Serial.read();
-    //  }
-    //}
   }
 
   float mean_param = sum / total_samples;
@@ -287,6 +275,18 @@ int countTarePresses(int window)
   return count;
 }
 
+void enterDeepSleep() {
+  flashLED();
+  if (is_charging) {
+    // set LED to a color indicating charging
+  } else {
+    turnOffLED();
+  }
+  uint8_t wakePin = g_ADigitalPinMap[tarePin];  // Map Arduino pin to nRF pin
+  nrf_gpio_cfg_sense_input(wakePin, NRF_GPIO_PIN_PULLDOWN, NRF_GPIO_PIN_SENSE_HIGH);
+  NRF_POWER->SYSTEMOFF = 1;
+}
+
 void setup()
 {
   // initialize the tare button.
@@ -302,17 +302,40 @@ void setup()
   if (debugState == LOW) {
     debug = 1;
   }
+  initFlash();
+  DEVICE_CODE = readDefaultDevice();
 
-  // If tare held at startup, enter calibration mode.
+  // If tare held at startup, enter debug or calibrate mode
   tareState = digitalRead(tarePin);
   if (tareState == HIGH) {
-    doCalibrate = 1;
-    setLEDColor(255, 255, 255);  // white
+    int num_presses;
+    int interrupt_mode = 0;
+    while (1) {
+      switch (interrupt_mode) {
+        case 0:  // debug mode
+          setLEDColor(255, 180, 0);  // orange
+          debug = 1;
+          doCalibrate = 0;
+          break;
+        case 1:  // run calibrate
+          setLEDColor(255, 255, 255);  // white
+          doCalibrate = 1;
+          debug = 0;
+          break;
+      }
+      num_presses = countTarePresses(1000);
+      if (num_presses == 1) {
+        interrupt_mode = (interrupt_mode + 1) % 2;
+      } else if (num_presses == 2) {
+        flashLED();
+        break;
+      } else {
+        continue;
+      }
+    }  // end while
+  // Otherwise, show green for 1s at startup
+  // allowing user to press tare to enter different modes.
   } else {
-    initFlash();
-    DEVICE_CODE = readDefaultDevice();
-    // At startup/after calibration, show green for 1s
-    // allowing user to press tare to enter different modes.
     setLEDColor(0, 255, 0);  // green
     int num_presses = countTarePresses(1000);
     if (num_presses > 0) {
@@ -343,6 +366,19 @@ void setup()
     }
   }
 
+  if (doCalibrate == 1) {
+    uint8_t* rgb = getLEDColor();
+    calibrate();
+    setLEDColor(rgb[0], rgb[1], rgb[2]);
+    delete[] rgb;
+  }
+
+  if (debug == 1) {
+    Serial.begin(115200);
+    while ( !Serial ) delay(10);   // for nrf52840 with native usb
+    Serial.println("Starting.");
+  }
+
   // Initialize the device.
   switch (DEVICE_CODE) {
     case 0:
@@ -355,11 +391,6 @@ void setup()
       break;
   }
 
-  if (debug == 1) {
-    Serial.begin(115200);
-    while ( !Serial ) delay(10);   // for nrf52840 with native usb
-    Serial.println("Starting.");
-  }
   // Initialize the scale
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
   delay(250);
@@ -369,13 +400,6 @@ void setup()
     debugPrintln("HX711 found");
   }
   scale.set_gain(LOADCELL_GAIN);
-
-  if (doCalibrate == 1) {
-    uint8_t* rgb = getLEDColor();
-    calibrate();
-    setLEDColor(rgb[0], rgb[1], rgb[2]);
-    delete[] rgb;
-  }
 
   // Set the SCALE.
   float scale_param = readScaleParam();
@@ -391,40 +415,34 @@ void setup()
 }
 
 void loop() {
+
+  if (sleepTimeoutStart == 0 || (prev_weight != weight)) {
+    sleepTimeoutStart = millis();
+  }
+
   tareState = digitalRead(tarePin);
   // Tare when button pressed.
   if (tareState == HIGH) {
     tare();
   }
 
-  //buttonState = digitalRead(buttonPin);
-  //if (buttonState == HIGH) {
-  //  weight += 1;
-  //} else {
-  //  if (weight > 0) {
-  //    weight -= 1;
-  //  }
-  //}
-  //debugPrint(weight);
-  //debugPrint(",");
-  //debugPrint(buttonState);
-  //debugPrint(",");
-  //for (int i=2; i<6; i++) {
-  //  debugPrint(device->getScaleData()[i]);
-  //}
-  //debugPrintln("");
-
   // Update the advertisement every time we get a new weight.
   // This is 10Hz by default on the HX711, but can be increased
   // to 80Hz via the RATE pin.
+  prev_weight = weight;
   int got_weight = getWeight();
-  //int got_weight = getWeightFiltered();
   if (got_weight == 1) {
     curr_time = millis();
     device->updateWeight(weight);
     device->updateTimestamp(curr_time);
     device->updateAdvData();
     num_samples += 1;
+  }
+
+  if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > SLEEP_TIMEOUT)) {
+    enterDeepSleep();
+    // Will sleep until tare button pressed.
+    sleepTimeoutStart = millis();
   }
 
   // In case of overflow.
