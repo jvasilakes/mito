@@ -1,3 +1,5 @@
+#include <iostream>
+#include <memory>
 #include <string.h>
 #include "Adafruit_TinyUSB.h"
 #include "src/lib/HX711.h"
@@ -7,13 +9,12 @@
 
 #define SLEEP_TIMEOUT 60000
 
+
 /* Set in setup() */
 uint8_t DEVICE_CODE;
 // int DEVICE_CODE = 0;  // WH06
 // int DEVICE_CODE = 1;  // Tindeq
 int NUM_DEVICES = 2;
-
-bool doCalibrate = 0;  // Tare button pressed at startup.
 
 // Tare button
 const uint8_t tarePin = 7;  // the tare button
@@ -26,6 +27,7 @@ bool buttonState = 0;
 // Debug pin. If grounded enter debug mode.
 const uint8_t debugPin = 3;
 bool debug = 0;
+bool doCalibrate = 0;
 
 // RGB LED pins
 const uint8_t redPin = 4;    // the number of the LED pin
@@ -176,26 +178,34 @@ void debugPrintln(T msg)
   }
 }
 
+/*
 void calibrate(void)
 {
-  Serial.begin(115200);
-  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+  device = new Mito();
+  BLEUart bleuart = device->bleuart();
+  bleuart.begin();
+  device->setupCalibrate(bleuart);
+  while(1) {
+    bleuart.println("1");
+    delay(500);
+  }
+  bleuart.println("Scale calibration");
+  bleuart.println("=========================\n");
 
-  Serial.println("Scale calibration");
-  Serial.println("=========================\n");
-
+  bleuart.println("Send any data to Tare the scale.");
   scale.set_scale();
   scale.tare();
-  Serial.println("Place a known weight on the scale, then enter its weight in grams.");
-  Serial.print("grams: ");
+  bleuart.println("Tared.");
+  bleuart.println("Place a weight on the scale.");
+  bleuart.print("grams: ");
 
   char inByte;
   uint8_t bufsize = 128;
   char inputBuffer[bufsize];
   int bufPtr = 0;
   while (inByte != '\n' && inByte != '\r') {
-    if (Serial.available() > 0) {
-      inByte = Serial.read();
+    if (bleuart.available() > 0) {
+      inByte = bleuart.read();
       if (inByte == ' ') {  // Skip empty space.
         continue;
       } else {
@@ -203,7 +213,7 @@ void calibrate(void)
           inputBuffer[bufPtr++] = inByte;
         }
       }
-      Serial.print(inByte);
+      bleuart.print(inByte);
     }
   }
   inputBuffer[bufPtr++] = '\0';
@@ -212,8 +222,7 @@ void calibrate(void)
   float grams = strtod(inputBuffer, NULL);
   float hectograms = grams / 100;
   
-  Serial.println();
-  Serial.println("Running calibration...");
+  bleuart.println("Running calibration...");
 
   float sum = 0.0f;
   float total_samples = 0.0f;
@@ -224,29 +233,30 @@ void calibrate(void)
       float scale_param = reading / hectograms;
       sum += scale_param;
       total_samples += 1.0f;
-      Serial.println(reading);
-      Serial.print("Estimated scale parameter: ");
-      Serial.println(scale_param);
+      bleuart.println(reading);
+      bleuart.print("Estimated scale parameter: ");
+      bleuart.println(scale_param);
       delay(250);
     }
   }
 
   float mean_param = sum / total_samples;
-  Serial.print("Average scale parameter: ");
-  Serial.println(mean_param);
+  bleuart.print("Average scale parameter: ");
+  bleuart.println(mean_param);
   int positive = 1;  // 1 for positive param, 0 for negative.
   if (mean_param < 0) {
     positive = 0;
     mean_param *= -1;
   }
-  Serial.println("Saving to internal memory");
+  bleuart.println("Saving to internal memory");
   initFlash();
   saveScaleParam(uint32_t(mean_param), positive);
-  Serial.print("Validating saved parameter");
+  bleuart.print("Validating saved parameter");
   float read_param = readScaleParam();
-  Serial.print(" = ");
-  Serial.println(read_param);
+  bleuart.print(" = ");
+  bleuart.println(read_param);
 }
+*/
 
 /* Count the number of times the tare button
    is pressed within a millisecond window */
@@ -315,12 +325,10 @@ void setup()
         case 0:  // debug mode
           setLEDColor(255, 180, 0);  // orange
           debug = 1;
-          doCalibrate = 0;
           break;
         case 1:  // run calibrate
           setLEDColor(255, 255, 255);  // white
           doCalibrate = 1;
-          debug = 0;
           break;
       }
       num_presses = countTarePresses(1000);
@@ -328,6 +336,18 @@ void setup()
         interrupt_mode = (interrupt_mode + 1) % 2;
       } else if (num_presses == 2) {
         flashLED();
+        if (doCalibrate == 1) {
+          device = new Mito();
+          // Downcast to Mito to access calibrate()
+          if (Mito* mito = static_cast<Mito*>(device)) {
+            mito->calibrate(scale);
+            NVIC_SystemReset();
+          } else {
+            // Something went terribly wrong.
+            setLEDColor(255, 0, 0);
+            while (1) {flashLED();}
+          }
+        }
         break;
       } else {
         continue;
@@ -364,13 +384,6 @@ void setup()
         }
       }
     }
-  }
-
-  if (doCalibrate == 1) {
-    uint8_t* rgb = getLEDColor();
-    calibrate();
-    setLEDColor(rgb[0], rgb[1], rgb[2]);
-    delete[] rgb;
   }
 
   if (debug == 1) {
