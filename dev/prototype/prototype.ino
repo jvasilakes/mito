@@ -25,7 +25,6 @@ const uint8_t buttonPin = 0;
 bool buttonState = 0;
 
 // Debug pin. If grounded enter debug mode.
-const uint8_t debugPin = 3;
 bool debug = 0;
 bool doCalibrate = 0;
 
@@ -148,6 +147,8 @@ int getWeight(void)
   }
   weight = numerator / scale.SCALE;
 
+  debugPrint(reading);
+  debugPrint(",");
   debugPrint(smoothed_reading);
   debugPrint(",");
   debugPrint(scale.OFFSET);
@@ -177,86 +178,6 @@ void debugPrintln(T msg)
     Serial.println(msg);
   }
 }
-
-/*
-void calibrate(void)
-{
-  device = new Mito();
-  BLEUart bleuart = device->bleuart();
-  bleuart.begin();
-  device->setupCalibrate(bleuart);
-  while(1) {
-    bleuart.println("1");
-    delay(500);
-  }
-  bleuart.println("Scale calibration");
-  bleuart.println("=========================\n");
-
-  bleuart.println("Send any data to Tare the scale.");
-  scale.set_scale();
-  scale.tare();
-  bleuart.println("Tared.");
-  bleuart.println("Place a weight on the scale.");
-  bleuart.print("grams: ");
-
-  char inByte;
-  uint8_t bufsize = 128;
-  char inputBuffer[bufsize];
-  int bufPtr = 0;
-  while (inByte != '\n' && inByte != '\r') {
-    if (bleuart.available() > 0) {
-      inByte = bleuart.read();
-      if (inByte == ' ') {  // Skip empty space.
-        continue;
-      } else {
-        if (bufPtr < (bufsize - 1)) {
-          inputBuffer[bufPtr++] = inByte;
-        }
-      }
-      bleuart.print(inByte);
-    }
-  }
-  inputBuffer[bufPtr++] = '\0';
-  bufPtr = 0;
-
-  float grams = strtod(inputBuffer, NULL);
-  float hectograms = grams / 100;
-  
-  bleuart.println("Running calibration...");
-
-  float sum = 0.0f;
-  float total_samples = 0.0f;
-  for (int i=0; i<10; i++) {
-    //for (int j=0; j<5; j++) {
-    for (int j=0; j<1; j++) {
-      float reading = scale.get_units(10);
-      float scale_param = reading / hectograms;
-      sum += scale_param;
-      total_samples += 1.0f;
-      bleuart.println(reading);
-      bleuart.print("Estimated scale parameter: ");
-      bleuart.println(scale_param);
-      delay(250);
-    }
-  }
-
-  float mean_param = sum / total_samples;
-  bleuart.print("Average scale parameter: ");
-  bleuart.println(mean_param);
-  int positive = 1;  // 1 for positive param, 0 for negative.
-  if (mean_param < 0) {
-    positive = 0;
-    mean_param *= -1;
-  }
-  bleuart.println("Saving to internal memory");
-  initFlash();
-  saveScaleParam(uint32_t(mean_param), positive);
-  bleuart.print("Validating saved parameter");
-  float read_param = readScaleParam();
-  bleuart.print(" = ");
-  bleuart.println(read_param);
-}
-*/
 
 /* Count the number of times the tare button
    is pressed within a millisecond window */
@@ -302,18 +223,18 @@ void setup()
   // initialize the tare button.
   pinMode(tarePin, INPUT);
   pinMode(buttonPin, INPUT);
-  pinMode(debugPin, INPUT_PULLUP);
   // initialize the LED.
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
 
-  bool debugState = digitalRead(debugPin);
-  if (debugState == LOW) {
-    debug = 1;
-  }
   initFlash();
   DEVICE_CODE = readDefaultDevice();
+
+  // Initialize the scale
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
+  delay(250);
+  scale.power_up();
 
   // If tare held at startup, enter debug or calibrate mode
   tareState = digitalRead(tarePin);
@@ -325,12 +246,14 @@ void setup()
         case 0:  // debug mode
           setLEDColor(255, 180, 0);  // orange
           debug = 1;
+          doCalibrate = 0;
           break;
         case 1:  // run calibrate
           setLEDColor(255, 255, 255);  // white
+          debug = 0;
           doCalibrate = 1;
           break;
-      }
+      } // end switch interrupt_mode
       num_presses = countTarePresses(1000);
       if (num_presses == 1) {
         interrupt_mode = (interrupt_mode + 1) % 2;
@@ -346,12 +269,10 @@ void setup()
             // Something went terribly wrong.
             setLEDColor(255, 0, 0);
             while (1) {flashLED();}
-          }
-        }
+          }  // end if downcast
+        }  // end if doCalibrate 
         break;
-      } else {
-        continue;
-      }
+      } else { continue; }
     }  // end while
   // Otherwise, show green for 1s at startup
   // allowing user to press tare to enter different modes.
@@ -392,27 +313,24 @@ void setup()
     Serial.println("Starting.");
   }
 
+  if (scale.wait_ready_timeout(1000)) {
+    debugPrintln("HX711 ready.");
+  }
+
   // Initialize the device.
   switch (DEVICE_CODE) {
     case 0:
       setLEDColor(0, 200, 255);  // light blue
       device = new WH06();
+      debugPrintln("Device: WH06");
       break;
     case 1:
       setLEDColor(255, 255, 0);  // yellow
       device = new Tindeq();
+      debugPrintln("Device: Tindeq");
       break;
   }
 
-  // Initialize the scale
-  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN, LOADCELL_GAIN);
-  delay(250);
-  scale.power_up();
-  delay(250);
-  if (scale.wait_ready_timeout(1000)) {
-    debugPrintln("HX711 found");
-  }
-  scale.set_gain(LOADCELL_GAIN);
 
   // Set the SCALE.
   float scale_param = readScaleParam();
