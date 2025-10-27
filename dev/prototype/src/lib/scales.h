@@ -14,7 +14,7 @@ class Device
   public:
     virtual void begin(void);
     virtual void updateWeight(uint32_t weight);
-    virtual void updateTimestamp(uint16_t time);
+    virtual void updateTimestamp(uint32_t time);
     virtual void advertiseData(void);
     virtual void updateAdvData(void);
     virtual ~Device() {};
@@ -45,7 +45,7 @@ class WH06 : public Device
     // Update the scale_data with the current weight reading.
     void updateWeight(uint32_t weight) override;
     // Update the scale_data timestamp.
-    void updateTimestamp(uint16_t time) override;
+    void updateTimestamp(uint32_t time) override;
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
@@ -84,7 +84,7 @@ class Tindeq : public Device
     void updateWeight(uint32_t weight) override;
 
     // Update the scale_data timestamp.
-    void updateTimestamp(uint16_t time) override;
+    void updateTimestamp(uint32_t time) override;
 
     // Setup and start BLE advertising.
     void begin(void) override;
@@ -137,7 +137,7 @@ class Mito : public Device
     void updateWeight(uint32_t weight) override;
 
     // Update the scale_data timestamp.
-    void updateTimestamp(uint16_t time) override;
+    void updateTimestamp(uint32_t time) override;
 
     // Setup and start BLE advertising.
     void begin(void) override;

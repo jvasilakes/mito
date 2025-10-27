@@ -49,8 +49,8 @@ uint32_t smoothed_reading = 0;  // For computing exponential moving average.
 uint32_t weight = 0;  // Current weight reading in grams.
 uint32_t prev_weight = 0;  // Previous weight reading in grams.
 bool weight_changed = 0;  // To keep track of sleep timeout.
-uint16_t prev_time = 0;  // To measure increments without delay() 
-uint16_t curr_time = 0;  // Current time stamp
+uint32_t prev_time = 0;  // To measure increments without delay() 
+uint32_t curr_time = 0;  // Current time stamp
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
 uint32_t sleepTimeoutStart = 0;
@@ -183,8 +183,9 @@ void debugPrintln(T msg)
    is pressed within a millisecond window */
 int countTarePresses(int window)
 {
-  curr_time = millis();
-  prev_time = millis();
+  window *= 1000;  // since curr/prev_time are microseconds.
+  curr_time = micros();
+  prev_time = micros();
   int count = 0;
   int newState = LOW;
   int oldState = LOW;
@@ -197,11 +198,11 @@ int countTarePresses(int window)
       }
       oldState = newState;
     }
-    curr_time = millis();
+    curr_time = micros();
     delay(50);  // Debounce the button.
   }
-  curr_time = millis();
-  prev_time = millis();
+  curr_time = micros();
+  prev_time = micros();
 
   return count;
 }
@@ -363,7 +364,7 @@ void loop() {
   prev_weight = weight;
   int got_weight = getWeight();
   if (got_weight == 1) {
-    curr_time = millis();
+    curr_time = micros();
     device->updateWeight(weight);
     device->updateTimestamp(curr_time);
     device->updateAdvData();
@@ -378,13 +379,13 @@ void loop() {
 
   // In case of overflow.
   if (curr_time < prev_time) {
-    curr_time = prev_time = millis();
+    curr_time = prev_time = micros();
   }
 
   // Measure sampling rate.
-  if ((curr_time - prev_time) >= 1000) {
+  if ((curr_time - prev_time) >= 1000000) {
     hz = num_samples;
-    curr_time = prev_time = millis();
+    curr_time = prev_time = micros();
     num_samples = 0;
   }
 }

@@ -9,13 +9,15 @@ extern WH06 device;
 
 void WH06::updateWeight(uint32_t weight)
 {
+  // WH06 works with hectograms for some reason.
   uint8_t msb = ((weight * 10) & 0xFF00U) >> 8U;
   uint8_t lsb = ((weight * 10) & 0x00FFU);
   scale_data[SCALE_DATA_WEIGHT_INT] = msb;
   scale_data[SCALE_DATA_WEIGHT_FRAC] = lsb;
 }
 
-void WH06::updateTimestamp(uint16_t time)
+//void WH06::updateTimestamp(uint16_t time)
+void WH06::updateTimestamp(uint32_t time)
 {
   // Update the scale_data with the current timestamp.
   uint8_t msb = (time & 0xFF00U) >> 8U;
@@ -85,10 +87,9 @@ void Tindeq::updateWeight(uint32_t weight)
   memcpy(&scale_data[2], &f_weight, sizeof(float));
 }
 
-void Tindeq::updateTimestamp(uint16_t time)
+void Tindeq::updateTimestamp(uint32_t time)
 {
-  uint32_t upcast_time = static_cast<uint32_t>(time);
-  memcpy(&scale_data[6], &upcast_time, sizeof(uint32_t));
+  memcpy(&scale_data[6], &time, sizeof(uint32_t));
 }
 
 void Tindeq::updateAdvData(void)
@@ -134,14 +135,12 @@ void Mito::updateWeight(uint32_t weight)
 {
   float f_weight = static_cast<float>(weight);
   // Because the int weight is encoded as grams.
-  f_weight = f_weight / 10;
   memcpy(&scale_data[2], &f_weight, sizeof(float));
 }
 
-void Mito::updateTimestamp(uint16_t time)
+void Mito::updateTimestamp(uint32_t time)
 {
-  uint32_t upcast_time = static_cast<uint32_t>(time);
-  memcpy(&scale_data[6], &upcast_time, sizeof(uint32_t));
+  memcpy(&scale_data[6], &time, sizeof(uint32_t));
 }
 
 void Mito::updateAdvData(void)
@@ -213,7 +212,6 @@ void Mito::calibrate(HX711 scale)
   bufPtr = 0;
 
   float grams = strtod(inputBuffer, NULL);
-  float hectograms = grams / 100;
   
   bleuart.println("\nCalibrating...");
 
@@ -223,7 +221,7 @@ void Mito::calibrate(HX711 scale)
     //for (int j=0; j<5; j++) {
     for (int j=0; j<1; j++) {
       float reading = scale.get_units(10);
-      float scale_param = reading / hectograms;
+      float scale_param = reading / grams;
       sum += scale_param;
       total_samples += 1.0f;
       bleuart.println(reading);
