@@ -10,8 +10,8 @@ extern WH06 device;
 void WH06::updateWeight(uint32_t weight)
 {
   // WH06 works with hectograms for some reason.
-  uint8_t msb = ((weight * 10) & 0xFF00U) >> 8U;
-  uint8_t lsb = ((weight * 10) & 0x00FFU);
+  uint8_t msb = ((weight / 10) & 0xFF00U) >> 8U;
+  uint8_t lsb = ((weight / 10) & 0x00FFU);
   scale_data[SCALE_DATA_WEIGHT_INT] = msb;
   scale_data[SCALE_DATA_WEIGHT_FRAC] = lsb;
 }
@@ -56,16 +56,98 @@ void WH06::begin(void)
   advertiseData();
 }
 
+
+/*******************************
+ ******** ForceBoard ***********
+*******************************/
+void Forceboard::advertiseData(void)
+{
+  Bluefruit.Periph.setConnIntervalMS(8, 16);
+  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+
+  // Start the service
+  forceboard.begin();
+  datapoint.setProperties(CHR_PROPS_NOTIFY);
+  datapoint.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  datapoint.setMaxLen(sizeof(scale_data));
+  datapoint.begin();
+  datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
+
+  //Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  Bluefruit.Advertising.setType(BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED);
+
+  const uint8_t data1[2] = { 0x80, 0x0C };
+  Bluefruit.Advertising.addData(0x19, &data1, sizeof(data1));
+
+  const uint8_t data[12] = {
+    0x7f, 0xd6, 0x50, 0x69, 0x74, 0x63,
+    0x68, 0x20, 0x53, 0x69, 0x78, 0x00
+  };
+  Bluefruit.Advertising.addData(0xFF, &data, sizeof(data));
+
+  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.Advertising.addName();
+
+  Bluefruit.Advertising.addService(forceboard);
+
+  /* Start Advertising */
+  Bluefruit.Advertising.restartOnDisconnect(true);
+  Bluefruit.Advertising.setInterval(32, 128);     // in unit of 0.625 ms, so 32=20ms
+  Bluefruit.Advertising.setFastTimeout(0);        // always advertise at 32.
+  Bluefruit.Advertising.start(0);                 // 0 = Don't stop advertising.
+}
+
+void Forceboard::updateWeight(uint32_t weight)
+{
+  // Convert from grams to lbs.
+  uint32_t lbs = weight * 0.002204623;
+
+  // Encode in their weird scheme
+  uint32_t remain = lbs;
+  uint32_t divs[3] = { 32768, 256, 1 };
+  uint8_t encoding[3] = { 0 };
+  for (int i=0; i<3; i++) {
+      int t = min(remain / divs[i], 255);
+      encoding[i] = t;
+      remain -= divs[i] * t;
+  }
+  uint16_t num_samples = 1;
+  memcpy(&scale_data[0], &num_samples, sizeof(num_samples));
+  memcpy(&scale_data[2], &encoding, sizeof(encoding));
+}
+
+void Forceboard::updateTimestamp(uint32_t time)
+{
+  return;
+}
+
+void Forceboard::updateAdvData(void)
+{
+  // Update the advertisement with the current scale data.
+  datapoint.notify(&scale_data, sizeof(scale_data));
+}
+
+void Forceboard::begin(void)
+{
+  Bluefruit.begin();
+  advertiseData();
+}
+
 /*******************************
  ************ TINDEQ ***********
 *******************************/
 void Tindeq::advertiseData(void)
 {
+  Bluefruit.Periph.setConnIntervalMS(8, 16);
+  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+
+  // Start the service
   progressor.begin();
   datapoint.setProperties(CHR_PROPS_NOTIFY);
   datapoint.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  datapoint.setFixedLen(sizeof(scale_data));
   datapoint.begin();
-  datapoint.notify(&scale_data, 10);  // timestamp
+  datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.setName(DEVICE_NAME);
@@ -74,16 +156,16 @@ void Tindeq::advertiseData(void)
 
   /* Start Advertising */
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 32);    // in unit of 0.625 ms, so 32=20ms
-  Bluefruit.Advertising.setFastTimeout(0);      // always advertise at 32.
-  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising.
+  Bluefruit.Advertising.setInterval(32, 128);     // in unit of 0.625 ms, so 32=20ms
+  Bluefruit.Advertising.setFastTimeout(0);        // always advertise at 32.
+  Bluefruit.Advertising.start(0);                 // 0 = Don't stop advertising.
 }
 
 void Tindeq::updateWeight(uint32_t weight)
 {
   float f_weight = static_cast<float>(weight);
   // Because the int weight is encoded as grams.
-  f_weight = f_weight / 10;
+  f_weight = f_weight / 1000;
   memcpy(&scale_data[2], &f_weight, sizeof(float));
 }
 
@@ -95,9 +177,7 @@ void Tindeq::updateTimestamp(uint32_t time)
 void Tindeq::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
-  Bluefruit.Advertising.clearData();
-  Bluefruit.Advertising.addName();
-  datapoint.notify(&scale_data, 10);
+  datapoint.notify(&scale_data, sizeof(scale_data));
 }
 
 void Tindeq::begin(void)
@@ -117,7 +197,7 @@ void Mito::advertiseData(void)
   datapoint.setProperties(CHR_PROPS_NOTIFY);
   datapoint.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   datapoint.begin();
-  datapoint.notify(&scale_data, 10);  // timestamp
+  datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.setName(DEVICE_NAME);
@@ -146,9 +226,7 @@ void Mito::updateTimestamp(uint32_t time)
 void Mito::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
-  Bluefruit.Advertising.clearData();
-  Bluefruit.Advertising.addName();
-  datapoint.notify(&scale_data, 10);
+  datapoint.notify(&scale_data, sizeof(scale_data));
 }
 
 void Mito::begin(void)
@@ -218,29 +296,22 @@ void Mito::calibrate(HX711 scale)
   float sum = 0.0f;
   float total_samples = 0.0f;
   for (int i=0; i<10; i++) {
-    //for (int j=0; j<5; j++) {
-    for (int j=0; j<1; j++) {
-      float reading = scale.get_units(10);
-      float scale_param = reading / grams;
-      sum += scale_param;
-      total_samples += 1.0f;
-      bleuart.println(reading);
-      bleuart.println(scale_param);
-      delay(250);
-    }
+    //float reading = scale.get_units(10);
+    float reading = scale.read_average(10) - scale.OFFSET;
+    float scale_param = reading / grams;
+    sum += scale_param;
+    total_samples += 1.0f;
+    bleuart.println(reading);
+    bleuart.println(scale_param);
+    delay(250);
   }
 
   float mean_param = sum / total_samples;
   bleuart.print("Estimated parameter: ");
   bleuart.println(mean_param);
-  int positive = 1;  // 1 for positive param, 0 for negative.
-  if (mean_param < 0) {
-    positive = 0;
-    mean_param *= -1;
-  }
   bleuart.println("Saving...");
   initFlash();
-  saveScaleParam(uint32_t(mean_param), positive);
+  saveScaleParam(mean_param);
   bleuart.print("Validating...");
   float read_param = readScaleParam();
   bleuart.println(read_param);

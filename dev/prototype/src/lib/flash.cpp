@@ -36,9 +36,8 @@ Adafruit_SPIFlash flash(&flashTransport);
 /* Size of the scale param. 4 because we're converting
  * between int32_t and int8_t[] */
 #define BUFSIZE          4  
-#define PARAM_ADDR       0  // Address of the scale param
-#define PARAM_SIGN_ADDR  4  // PARAM_ADDR + BUFSIZE
-#define DEVICE_CODE_ADDR 5  // PARAM_SIGN_ADDR + 1
+#define PARAM_ADDR       0  // Address of the scale parameter.
+#define DEVICE_CODE_ADDR 4  // Address of the device code.
 
 // 4 byte aligned buffer has best result with nRF QSPI
 uint8_t param_bufwrite[BUFSIZE] __attribute__ ((aligned(4)));
@@ -51,13 +50,12 @@ void initFlash(void)
   flash.begin(&P25Q16H, 1);
 }
 
-void saveScaleParam(uint32_t param, uint8_t positive)
+void saveScaleParam(float param)
 {
   memcpy(param_bufwrite, &param, sizeof(param));
 
   flash.waitUntilReady();
   flash.writeBuffer(PARAM_ADDR, param_bufwrite, sizeof(param_bufwrite));
-  flash.writeBuffer(sizeof(param_bufwrite), &positive, sizeof(positive));
 }
 
 float readScaleParam(void)
@@ -67,15 +65,9 @@ float readScaleParam(void)
 
   flash.waitUntilReady();
   flash.readBuffer(PARAM_ADDR, param_bufread, sizeof(param_bufread));
-  flash.readBuffer(PARAM_SIGN_ADDR, &param_bufpos, sizeof(param_bufpos));
 
-  uint32_t base_value;
   float value;
-  memcpy(&base_value, &param_bufread, sizeof(param_bufread));
-  value = float(base_value);
-  if (param_bufpos == 0) {
-    value *= -1;
-  }
+  memcpy(&value, &param_bufread, sizeof(param_bufread));
   return value;
 }
 

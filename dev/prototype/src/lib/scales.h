@@ -92,6 +92,80 @@ class Tindeq : public Device
     void updateAdvData(void) override;
 };
 
+// See https://github.com/Stevie-Ray/hangtime-grip-connect/blob/main/packages/core/src/models/device/forceboard.model.ts
+class Forceboard : public Device
+{
+  private:
+    // Forceboard service
+    // 9a88d67f-8df2-4afe-9e0d-c2bbbe773dd0 
+    const uint8_t primary_service_uuid128[16] = {
+      0xd0, 0x3d, 0x77, 0xbe, 0xbb, 0xc2, 0x0d, 0x9e,
+      0xfe, 0x4a, 0xf2, 0x8d, 0x7f, 0xd6, 0x88, 0x9a
+    };
+    //BLEService forceboard = BLEService(primary_service_uuid128);
+
+    // Read
+    // 9a88d685-8df2-4afe-9e0d-c2bbbe773dd0
+    const uint8_t datapoint_characteristic_uuid128[16] = {
+      0xd0, 0x3d, 0x77, 0xbe, 0xbb, 0xc2, 0x0d, 0x9e,
+      0xfe, 0x4a, 0xf2, 0x8d, 0x85, 0xd6, 0x88, 0x9a
+    };
+    //BLECharacteristic datapoint = BLECharacteristic(datapoint_characteristic_uuid128);
+
+    // Weight service
+    // 467a8516-6e39-11eb-9439-0242ac130002
+    const uint8_t weight_service_uuid128[16] = {
+      0x02, 0x00, 0x13, 0xac, 0x42, 0x02, 0x39, 0x94,
+      0xeb, 0x11, 0x39, 0x6e, 0x16, 0x85, 0x7a, 0x46
+    };
+    BLEService forceboard = BLEService(weight_service_uuid128);
+
+    // Read + Write
+    // 467a8518-6e39-11eb-9439-0242ac130002
+    const uint8_t weight_characteristic_uuid128[16] = {
+      0x02, 0x00, 0x13, 0xac, 0x42, 0x02, 0x39, 0x94,
+      0xeb, 0x11, 0x39, 0x6e, 0x18, 0x85, 0x7a, 0x46
+    };
+    BLECharacteristic datapoint = BLECharacteristic(weight_characteristic_uuid128);
+
+    // Unknown service
+    // f3641400-00b0-4240-ba50-05ca45bf8abc
+    const uint8_t unk_service_uuid128[16] = {
+      0xbc, 0x8a, 0xbf, 0x45, 0xca, 0x05, 0x50, 0xba,
+      0x40, 0x42, 0xb0, 0x00, 0x00, 0x14, 0x64, 0xf3
+    };
+    //BLEService forceboard = BLEService(unk_service_uuid128);
+
+    // Read + Indicate
+    // f3641401-00b0-4240-ba50-05ca45bf8abc
+    const uint8_t unk_characteristic_uuid128[16] = {
+      0xbc, 0x8a, 0xbf, 0x45, 0xca, 0x05, 0x50, 0xba,
+      0x40, 0x42, 0xb0, 0x00, 0x01, 0x14, 0x64, 0xf3
+    };
+    //BLECharacteristic datapoint = BLECharacteristic(unk_characteristic_uuid128);
+
+  public:
+    uint8_t scale_data[5] = {
+      0x00, 0x00,  // Number of samples in the packet
+      0x00, 0x00, 0x00,  // Weight measurement in lbs. Bytes dot-product [32768, 256, 1]
+    };
+    uint8_t txValue = 0;
+
+    const char DEVICE_NAME[12] = "Force Board";
+
+    // Update the scale_data with the current weight reading.
+    void updateWeight(uint32_t weight) override;
+
+    // Update the scale_data timestamp.
+    void updateTimestamp(uint32_t time) override;
+
+    // Setup and start BLE advertising.
+    void begin(void) override;
+    void advertiseData(void) override;
+    void updateAdvData(void) override;
+};
+
+
 class Mito : public Device
 {
   private:

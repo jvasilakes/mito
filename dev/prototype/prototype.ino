@@ -1,19 +1,19 @@
 #include <iostream>
 #include <memory>
 #include <string.h>
-#include "Adafruit_TinyUSB.h"
+#include <Adafruit_TinyUSB.h>
+#include <xiaobattery.h>
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
 #include "src/lib/scales.h"
 
 
-#define SLEEP_TIMEOUT 60000
+#define LIGHT_SLEEP_TIMEOUT 60000  // 1 minute
+#define DEEP_SLEEP_TIMEOUT 120000  // 2 minutes
 
 
 /* Set in setup() */
-uint8_t DEVICE_CODE;
-// int DEVICE_CODE = 0;  // WH06
-// int DEVICE_CODE = 1;  // Tindeq
+uint8_t DEVICE_CODE;  // 0: WH06  1: Tindeq
 int NUM_DEVICES = 2;
 
 // Tare button
@@ -41,23 +41,24 @@ const uint8_t LOADCELL_SCK_PIN = 10;
 const uint8_t LOADCELL_GAIN = 128;
 
 // Parameter for Exponential Moving Average
-uint32_t EMA_ALPHA = 30;
+int EMA_ALPHA = 30;
 
 // Global Variables
 long reading = 0;  // For computing exponential moving average.
-uint32_t smoothed_reading = 0;  // For computing exponential moving average.
+long smoothed_reading = 0;  // For computing exponential moving average.
 uint32_t weight = 0;  // Current weight reading in grams.
 uint32_t prev_weight = 0;  // Previous weight reading in grams.
-bool weight_changed = 0;  // To keep track of sleep timeout.
 uint32_t prev_time = 0;  // To measure increments without delay() 
 uint32_t curr_time = 0;  // Current time stamp
 uint16_t num_samples = 0;
 uint16_t hz = 0;  // For measuring HX711 speed.
 uint32_t sleepTimeoutStart = 0;
 bool is_charging = 0;
+float avg_battery_voltage = 0;
+
 HX711 scale;  // The ADC
 Device* device = nullptr;  // The overall device: WH06, Tindeq
-
+Xiao battery;
 
 void setLEDColor(uint8_t red, uint8_t green, uint8_t blue)
 {
@@ -159,8 +160,22 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(weight);
   debugPrint(",");
-  debugPrintln(hz);
+  debugPrint(hz);
+  debugPrint(",");
+  debugPrintln(avg_battery_voltage);
   return rval;
+}
+
+float getBatteryPercentage() {
+  float vbat = battery.GetBatteryVoltage();
+  avg_battery_voltage = ((EMA_ALPHA * vbat) + ((100 - EMA_ALPHA) * avg_battery_voltage))/100;
+  if (avg_battery_voltage <= 3.3) {
+    return 0.0;
+  } else if (avg_battery_voltage >= 4200) {
+    return 1.0;
+  } else {
+    return (avg_battery_voltage - 3.3) / 4.2;
+  }
 }
 
 template <typename T>
@@ -219,6 +234,29 @@ void enterDeepSleep() {
   NRF_POWER->SYSTEMOFF = 1;
 }
 
+void lightSleep() {
+  uint8_t* rgb = getLEDColor();
+  scale.power_down();
+  while (1) {
+    tareState = digitalRead(tarePin);
+    if (tareState == HIGH) {
+      break;
+    }
+    if (is_charging) {
+      // Pulse LED with charge status color
+      // Green, orange, red.
+    }
+    if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > DEEP_SLEEP_TIMEOUT)) {
+      // If we enter deep sleep, a full system reset will occur on exit.
+      enterDeepSleep();
+    }
+    delay(100);
+  }
+  scale.power_up();
+  setLEDColor(rgb[0], rgb[1], rgb[2]);
+  flashLED();
+}
+
 void setup()
 {
   // initialize the tare button.
@@ -228,6 +266,9 @@ void setup()
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
+
+  // Initialize with the current battery voltage.
+  avg_battery_voltage = battery.GetBatteryVoltage();
 
   initFlash();
   DEVICE_CODE = readDefaultDevice();
@@ -322,8 +363,10 @@ void setup()
   switch (DEVICE_CODE) {
     case 0:
       setLEDColor(0, 200, 255);  // light blue
-      device = new WH06();
-      debugPrintln("Device: WH06");
+      //device = new WH06();
+      device = new Forceboard();
+      //debugPrintln("Device: WH06");
+      debugPrintln("Device: Forceboard");
       break;
     case 1:
       setLEDColor(255, 255, 0);  // yellow
@@ -367,12 +410,13 @@ void loop() {
     curr_time = micros();
     device->updateWeight(weight);
     device->updateTimestamp(curr_time);
+    int start = micros();
     device->updateAdvData();
     num_samples += 1;
   }
 
-  if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > SLEEP_TIMEOUT)) {
-    enterDeepSleep();
+  if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > LIGHT_SLEEP_TIMEOUT)) {
+    lightSleep();
     // Will sleep until tare button pressed.
     sleepTimeoutStart = millis();
   }
@@ -388,4 +432,7 @@ void loop() {
     curr_time = prev_time = micros();
     num_samples = 0;
   }
+
+  // Poll the battery
+  getBatteryPercentage();
 }
