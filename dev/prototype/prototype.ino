@@ -9,7 +9,7 @@
 
 
 #define LIGHT_SLEEP_TIMEOUT 60000  // 1 minute
-#define DEEP_SLEEP_TIMEOUT 120000  // 2 minutes
+#define DEEP_SLEEP_TIMEOUT 180000  // 3 minutes
 
 
 /* Set in setup() */
@@ -24,9 +24,9 @@ bool tareState = 0;  // tare button push state.
 const uint8_t buttonPin = 0;
 bool buttonState = 0;
 
-// Debug pin. If grounded enter debug mode.
-bool debug = 0;
-bool doCalibrate = 0;
+bool debug = 0;  // Enter debug mode, which opens serial over usb.
+bool doCalibrate = 0;  // Enter calibration mode.
+bool enter_dfu = 0;  // Enter DFU mode and reset.
 
 // RGB LED pins
 const uint8_t redPin = 4;    // the number of the LED pin
@@ -162,7 +162,9 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(hz);
   debugPrint(",");
-  debugPrintln(avg_battery_voltage);
+  debugPrint(avg_battery_voltage);
+  debugPrint(",");
+  debugPrintln(getBatteryPercentage());
   return rval;
 }
 
@@ -171,7 +173,7 @@ float getBatteryPercentage() {
   avg_battery_voltage = ((EMA_ALPHA * vbat) + ((100 - EMA_ALPHA) * avg_battery_voltage))/100;
   if (avg_battery_voltage <= 3.3) {
     return 0.0;
-  } else if (avg_battery_voltage >= 4200) {
+  } else if (avg_battery_voltage >= 4.2) {
     return 1.0;
   } else {
     return (avg_battery_voltage - 3.3) / 4.2;
@@ -236,7 +238,11 @@ void enterDeepSleep() {
 
 void lightSleep() {
   uint8_t* rgb = getLEDColor();
+  setLEDColor(0, 255, 0);
+  flashLED();
   scale.power_down();
+  turnOffLED();
+  int start_time = millis();
   while (1) {
     tareState = digitalRead(tarePin);
     if (tareState == HIGH) {
@@ -245,12 +251,23 @@ void lightSleep() {
     if (is_charging) {
       // Pulse LED with charge status color
       // Green, orange, red.
+      // TODO
     }
     if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > DEEP_SLEEP_TIMEOUT)) {
-      // If we enter deep sleep, a full system reset will occur on exit.
-      enterDeepSleep();
+      if (DEVICE_CODE != 1) {
+        // Don't enter deep sleep when Tindeq, as this will end the training
+        //   session in the app without saving progress. Annoying if you've programmed
+        //   in rests longer than 3 minutes.
+        // If we enter deep sleep, a full system reset will occur on exit.
+        enterDeepSleep();
+      }
     }
-    delay(100);
+    if (millis() - start_time >= 2000) {
+      setLEDColor(0, 255, 0);
+      delay(100);
+      turnOffLED();
+      start_time = millis();
+    }
   }
   scale.power_up();
   setLEDColor(rgb[0], rgb[1], rgb[2]);
@@ -289,19 +306,30 @@ void setup()
           setLEDColor(255, 180, 0);  // orange
           debug = 1;
           doCalibrate = 0;
+          enter_dfu = 0;
           break;
         case 1:  // run calibrate
           setLEDColor(255, 255, 255);  // white
           debug = 0;
           doCalibrate = 1;
+          enter_dfu = 0;
           break;
+        case 2:  // DFU
+          setLEDColor(225, 0, 255);  // purple
+          debug = 0;
+          doCalibrate = 0;
+          enter_dfu = 1;
       } // end switch interrupt_mode
       num_presses = countTarePresses(1000);
       if (num_presses == 1) {
-        interrupt_mode = (interrupt_mode + 1) % 2;
+        interrupt_mode = (interrupt_mode + 1) % 3;
       } else if (num_presses == 2) {
         flashLED();
-        if (doCalibrate == 1) {
+        if (enter_dfu == 1) {
+          // See https://forums.adafruit.com/viewtopic.php?t=218553
+          NRF_POWER->GPREGRET = 0x57;  // DFU_MAGIC_UF2_RESET
+          NVIC_SystemReset();
+        } else if (doCalibrate == 1) {
           device = new Mito();
           // Downcast to Mito to access calibrate()
           if (Mito* mito = static_cast<Mito*>(device)) {
@@ -391,7 +419,12 @@ void setup()
 
 void loop() {
 
-  if (sleepTimeoutStart == 0 || (prev_weight != weight)) {
+  int weight_diff = prev_weight - weight;
+  if (weight_diff < 0) {
+    weight_diff *= -1;
+  }
+  // Detect differences of 100g or more only.
+  if (sleepTimeoutStart == 0 || weight_diff > 100) {
     sleepTimeoutStart = millis();
   }
 
