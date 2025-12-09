@@ -186,13 +186,9 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(scale.SCALE);
   debugPrint(",");
-  debugPrint(midr);
-  debugPrint(",");
   debugPrint(weight);
   debugPrint(",");
   debugPrint(hz);
-  debugPrint(",");
-  debugPrint(curr_time);
   debugPrint(",");
   debugPrint(battery.IsChargingBattery());
   debugPrint(",");
