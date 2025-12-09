@@ -6,7 +6,6 @@
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
 #include "src/lib/scales.h"
-#include "src/lib/debug.h"
 
 
 #define LIGHT_SLEEP_TIMEOUT 60000  // 1 minute
