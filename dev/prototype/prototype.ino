@@ -40,6 +40,7 @@ const uint8_t LOADCELL_GAIN = 128;
 int EMA_ALPHA = 30;
 
 /* ========== Global Variables ========== */
+bool first_loop = 1;
 long reading = 0;  // Raw ADC reading.
 long smoothed_reading = 0;  // For computing exponential moving average.
 uint32_t weight = 0;  // Current weight reading in grams.
@@ -167,8 +168,15 @@ int getWeight(void)
     numerator = smoothed_reading - scale.OFFSET;
   }
   weight = numerator / scale.SCALE;
-  // Round weight to nearest 50 grams
-  weight = weight - (weight % 50);
+  // Don't register anything under 100 grams.
+  // This is a bit of a hack to get around possible
+  // load cell sensitivity issues.
+  if (weight < 100) {
+    weight = 0;
+  } else {
+    // Round weight to nearest 50 grams
+    weight = weight - (weight % 50);
+  }
 
   debugPrint(reading);
   debugPrint(",");
@@ -449,7 +457,6 @@ void setup()
 }
 
 void loop() {
-
   int weight_diff = prev_weight - weight;
   if (weight_diff < 0) {
     weight_diff *= -1;
@@ -472,6 +479,7 @@ void loop() {
       break;
     case 0x65:  // Start measurement
       if (currently_measuring == 0) {
+        tare();
         measure_time = start_measure_time = micros();
       }
       currently_measuring = 1;
