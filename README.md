@@ -1,6 +1,6 @@
 # Mito
 
-The smallest, cheapest, and only completely open-source force gauge to rival the Tindeq and Forceboard for isometric strength training.
+A tiny, cheap, hackable, completely open-source force gauge for isometric finger strength training.
 
 
 ![Mito](https://github.com/jvasilakes/mito/blob/master/pics/1000009354_cropped.jpg?raw=true)
@@ -8,11 +8,9 @@ The smallest, cheapest, and only completely open-source force gauge to rival the
 
 ## Hardware information
 
-The Mito is based on the Seeed XIAO NRF52840 microcontroller, an HX711 ADC, and a custom load cell. It runs at approximately 80 samples per second on the hardware side, and sends approximately 60 samples per second over bluetooth. Initial tests show a standard error of about 100g, and I ran into logistical issues adding weight before I could find the maximum supported weight.
+The Mito is based on the Seeed XIAO NRF52840 microcontroller, an HX711 ADC, and a custom load cell. It runs at approximately 80 samples per second on the hardware side, and sends approximately 60 samples per second over bluetooth. Initial tests show a standard error of about 100g. The load cell and two Peguet 3.5mm stainless steel maillon rapides provide a working load limit of 220kg and a breaking load of 1100kg. 
 
 ![Mito PCB](https://github.com/jvasilakes/mito/blob/master/hardware/mito.png?raw=true)
-
-The load cell is high quality stainless steel, and the anchor points are two Peguet 3.5mm stainless steel maillon rapides with a working load limit of 220kg and a breaking load of 1100kg. 
 
 
 ## User Guide
@@ -25,17 +23,17 @@ On one side of your device you'll see
 
 On the other there is a USB-C port that is used for battery charging and firmware updates.
 
-Assuming you've obtained a prebuilt device, it should be ready to go out of the box. Flip the switch to turn it on, and you'll see a green light for 1 second before it changes to yellow, indicating that the Mito is in Tindeq mode. Download the Tindeq app on your phone, register/sign in to your account, then press the red button in the upper right corner to connect.
+Assuming you've obtained a prebuilt device, it should be ready to go out of the box. Flip the switch to turn it on, and you'll see a green light for 1 second before it changes to yellow. Download the Frez app on your phone, register/sign in to your account, then press the red "Connect a device" button in lower corner. If the Mito is powered on, a scan of available devices should reveal a device called "Progressor". Connect to it, register it as "Mito" or what ever you like, and start training!
 
 
 ### Automatic sleep mode
 
-After 1 minute of inactivity (i.e., no weight changes) the Mito will enter sleep mode to save battery. This is indicated by a periodic flashing green light. To wake your Mito up, simply press the tare button and continue your training.
+After 1 minute of inactivity (i.e., no weight changes) the Mito will enter sleep mode to save battery. This is indicated by a periodic flashing LED. To wake your Mito up, simply press the tare button and continue your training.
 
 
 ### Charging the battery
 
-The Mito should need charging very infrequently. The current estimate is at least a few weeks of regular usage before the battery will run low. To charge, plug the Mito into a power source using a USB-C cable and turn it on. The Mito will enter sleep mode after 1 minute of inactivity and continue to charge.
+The Mito should need charging very infrequently. The current estimate is at least a few weeks of regular usage before the battery will run low. To charge, plug the Mito into a power source using a USB-C cable and turn it on with the hardware switch. The Mito will enter sleep mode after 1 minute of inactivity and continue to charge, indicated by a longer blinking LED.
 
 
 ### Firmware updates
@@ -43,15 +41,9 @@ The Mito should need charging very infrequently. The current estimate is at leas
 Firmware updates will be provided here on the Releases page, so keep an eye out. To update your device's firmware with a new version, follow these steps:
 
  1. Download the new firmware UF2 file onto your computer (e.g., `mito_v0.0.1.uf2`).
- 2. Plug your Mito into your computer while holding down the tare button. Release the button once you see the red light. You've now entered maintenance mode selection.
+ 2. Plug your Mito into your computer using the USB-C port while holding down the tare button. Release the button once you see the red light. You've now entered maintenance mode selection.
  3. Use single presses of the tare button to cycle through the maintenance modes until you see a blue light, which indicates firmware update mode. Double click the tare button to select it.
  4. The Mito should turn off and after a few moments a USB device called XIAO-SENSE should pop up on your computer. Simply drag and drop the new UF2 file onto the root folder of this device. Once the copy is complete, the Mito should reset, and you're done!
-
-If you run into errors with the drag and drop method in your computer's file explorer, it should work to copy over the new UF2 file on the command line. E.g., on my Linux machine I do
-
-```
-cp mito_v0.0.1.uf2 /media/jav/XIAO-SENSE/
-```
 
 
 ### Changing the default device mode
@@ -68,6 +60,19 @@ If for whatever reason you want your Mito to pretend to be a WH-06 (the original
 If you want to abort this and stay with your current default device, simply turn the Mito off and back on again.
 
 
+## Known Issues
+
+
+### Frez Connectivity
+
+It can happen that if you connect your Mito to Frez or another app (e.g., Tindeq), close the app, and the try to reconnect, the initialization will hang and you'll get a device disconnected error. This can be fixed by simply turning the Mito off and on again, and restarting the app.
+
+
+### Battery Level Indicator
+
+Frez shows battery level next to the connected device icon in the lower right corner. Unfortunately, the battery level sampling on the XIAO microcontroller isn't the most accurate, so you may see inconsistnet values. Overall, however, a low battery indication here is a good sign its time to charge.
+
+
 
 ## Advanced Usage
 
@@ -76,20 +81,32 @@ If you want to abort this and stay with your current default device, simply turn
 
 All pre-built Mito's are already calibrated. If you need to redo it however, follow these steps:
 
-TODO
+ 1. Download "Serial Bluetooth Terminal" app on your phone. 
+ 2. Turn on the Mito while holding down the tare button to enter maintenance mode.
+ 3. Use single presses of the tare button to cycle through modes until you see a white light. Press the tare button twice quickly to select this, which will enter calibration mode.
+ 4. Open the Serial Bluetooth Terminal app, scan for devices, and select the Mito.
+ 5. A terminal window should open. Hang the Mito on something solid, but keep the other anchor free. Once you see `Connecting to Mito... Connected` in the terminal window, send an empty command to start the calibration process. 
+ 6. After you see `Tared. Enter weight. grams: ` in the terminal, hang a known weight on the free anchor of the Mito. Make sure the weight is stationary and not swinging, twirling, etc.
+ 7. Enter the weight in grams (e.g., for a 20kg plate you would enter `20000`) and hit send.
+ 8. The calibration will now run for a few iterations. At the end it will print `Estimated parameter:  Saving...`. 
+ 9. Power cycle the Mito, connect to the Frez app, and validate that the reading is correct for the weight you used to calibrate. 
 
 
 ### Building the firmware
 
 ```
+cd dev
 arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense prototype
-arduino-cli board list  # Get /dev/ttyACM number
-arduino-cli upload -p /dev/ttyACM0 --fqbn Seeeduino:nrf52:xiaonRF52840Sense prototype
+python ../utils/uf2conv.py prototype/build/Seeeduino.nrf52.xiaonRF52840Sense/prototype.ino.hex --family 0xADA52840 --convert --output prototype/releases/mito_vX.X.X.uf2 
 ```
 
 ### Debug Mode
 
 If you're doing development and want to access information over serial, plug your Mito into your computer while holding down the tare button. Use single presses of the tare button until you see a red light. Double click the tare button to enter debug mode. In this mode, the Mito will not start its initialization routine until you've connected to it with a serial monitor. 
+
+Once the Mito has begun measuring, it will print data in the following format for each measurement taken from the ADC:
+
+`adc_reading,smoothed_adc_reading,scale_offset,scale_calibration_factor,weight_grams,sample_rate,battery_is_charging,battery_voltage,battery_percentage`
 
 
 ### Entering firmware update mode with the hardware reset button
