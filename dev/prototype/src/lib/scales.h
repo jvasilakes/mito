@@ -15,8 +15,11 @@ class Device
     virtual void begin(void);
     virtual void updateWeight(uint32_t weight);
     virtual void updateTimestamp(uint32_t time);
+    virtual void updateBatteryLevel(uint32_t mv) {};
+    virtual void updateBatteryAdv(void) {};
     virtual void advertiseData(void);
     virtual void updateAdvData(void);
+    virtual char getCommand(void) {return 0x65;};  // Start measurement
     virtual ~Device() {};
 };
 
@@ -56,24 +59,22 @@ class WH06 : public Device
 class Tindeq : public Device
 {
   private:
-    const uint8_t progressor_service_uuid128[16] = {
-      0x57, 0xad, 0xfe, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
-      0xc9, 0x40, 0xa6, 0x1e, 0x01, 0x17, 0x4e, 0x7e
-    };
-    BLEService progressor = BLEService(progressor_service_uuid128);
-
-    const uint8_t datapoint_characteristic_uuid128[16] = {
-      0x57, 0xad, 0xfe, 0x4f, 0xd3, 0x13, 0xcc, 0x9d,
-      0xc9, 0x40, 0xa6, 0x1e, 0x02, 0x17, 0x4e, 0x7e
-    };
-    BLECharacteristic datapoint = BLECharacteristic(datapoint_characteristic_uuid128);
+    BLEService progressor = BLEService("7e4e1701-1ea6-40c9-9dcc-13d34ffead57");
+    BLECharacteristic datapoint = BLECharacteristic("7e4e1702-1ea6-40c9-9dcc-13d34ffead57");
+    BLECharacteristic controlpoint = BLECharacteristic("7e4e1703-1ea6-40c9-9dcc-13d34ffead57");
 
   public:
+    uint8_t lastCommand[20];
     uint8_t scale_data[10] = {
       0x01, // Response code: weight measurement
       0x08,                   // length
       0x00, 0x00, 0x00, 0x00, // weight float32
       0x00, 0x00, 0x00, 0x00  // timestamp uint32_t
+    };
+    uint8_t batt_data[6] = {
+      0x00,  // Response code: battery level
+      0x04,  // length
+      0x00, 0x00, 0x00, 0x00  // battery millivolts
     };
 
     uint8_t txValue = 0;
@@ -90,6 +91,11 @@ class Tindeq : public Device
     void begin(void) override;
     void advertiseData(void) override;
     void updateAdvData(void) override;
+    void updateBatteryLevel(uint32_t mv) override;
+    void updateBatteryAdv(void) override;
+
+    // Control point
+    char getCommand(void) override;
 };
 
 // See https://github.com/Stevie-Ray/hangtime-grip-connect/blob/main/packages/core/src/models/device/forceboard.model.ts

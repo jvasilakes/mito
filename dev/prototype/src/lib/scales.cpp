@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Adafruit_TinyUSB.h>
 #include "scales.h"
 
 /*******************************
@@ -138,16 +139,19 @@ void Forceboard::begin(void)
 *******************************/
 void Tindeq::advertiseData(void)
 {
-  Bluefruit.Periph.setConnIntervalMS(8, 16);
-  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+  //Bluefruit.Periph.setConnIntervalMS(8, 16);
+  //Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
 
   // Start the service
   progressor.begin();
   datapoint.setProperties(CHR_PROPS_NOTIFY);
   datapoint.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-  datapoint.setFixedLen(sizeof(scale_data));
+  datapoint.setMaxLen(sizeof(scale_data));
   datapoint.begin();
-  datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
+
+  controlpoint.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
+  controlpoint.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+  controlpoint.begin();
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.setName(DEVICE_NAME);
@@ -178,6 +182,31 @@ void Tindeq::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
   datapoint.notify(&scale_data, sizeof(scale_data));
+}
+
+
+void Tindeq::updateBatteryLevel(uint32_t mv)
+{
+  memcpy(&batt_data[2], &mv, sizeof(uint32_t));
+}
+
+void Tindeq::updateBatteryAdv(void)
+{
+  datapoint.notify(&batt_data, sizeof(batt_data));
+}
+
+char Tindeq::getCommand(void)
+{
+  uint8_t buffer[20];
+  int len = controlpoint.read(buffer, sizeof(buffer));
+
+  if (len > 0 && memcmp(buffer, lastCommand, len) != 0) {
+    Serial.print("Command: ");
+    Serial.println(buffer[0], HEX);
+    memcpy(lastCommand, buffer, len);
+    return buffer[0];
+  }
+  return 0;
 }
 
 void Tindeq::begin(void)

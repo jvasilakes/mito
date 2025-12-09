@@ -1,43 +1,39 @@
+/* Adapted from 
+ * https://github.com/honvl/Seeed-Xiao-NRF52840-Battery */
+
+
 #include <Arduino.h>
+#include <bluefruit.h>
 
+#define BAT_HIGH_CHARGE 22  // HIGH for 50mA, LOW for 100mA
+#define BAT_CHARGE_STATE 23 // LOW for charging, HIGH not charging
 
-#define VBAT_MV_PER_LSB   (0.5859375F)    // 2.4V ADC range and 12-bit ADC resolution = 2400/4096
-#define VBAT_DIVIDER_COMP (2.96078F)      // (1000+510)/510  Voltage divider
-#define REAL_VBAT_MV_PER_LSB (VBAT_DIVIDER_COMP * VBAT_MV_PER_LSB)
+class Xiao {
+public:
+  Xiao();
+  float GetBatteryVoltage();
+  bool IsChargingBattery();
+};
 
-
-void initBattery(void) {
-  // Set the analog reference to 3.0V (default = 3.6V)
-  analogReference(AR_INTERNAL_2_4);
-  // Set the resolution to 12-bit (0..4095)
-  analogReadResolution(12); // Can be 8, 10, 12 or 14
-
+Xiao::Xiao() {
   pinMode(VBAT_ENABLE, OUTPUT);
+  pinMode(BAT_CHARGE_STATE, INPUT);
+
+  digitalWrite(BAT_HIGH_CHARGE, LOW); // charge with 100mA
+}
+
+#define VBAT_MV_PER_LBS (0.003395996F)
+
+float Xiao::GetBatteryVoltage() {
   digitalWrite(VBAT_ENABLE, LOW);
-  pinMode(PIN_VBAT, INPUT);
+
+  uint32_t adcCount = analogRead(PIN_VBAT);
+  float adcVoltage = adcCount * VBAT_MV_PER_LBS;
+  float vBat = adcVoltage * (1510.0 / 510.0);
+
+  digitalWrite(VBAT_ENABLE, HIGH);
+
+  return vBat;
 }
 
-
-float readVBAT(void) {
-  float raw;
-  // Get the raw 12-bit, 0..3000mV ADC value
-  raw = analogRead(PIN_VBAT);
-  // Convert the raw value to compensated mv, taking the resistor-
-  // divider into account (providing the actual LIPO voltage)
-  // ADC range is 0..2400 and resolution is 12-bit (0..4095)
-  //return raw * REAL_VBAT_MV_PER_LSB;
-  return raw;
-}
-
-uint8_t mvToPercent(float mvolts) {
-  if(mvolts<3300)
-    return 0;
-
-  if(mvolts <3600) {
-    mvolts -= 3300;
-    return mvolts/30;
-  }
-
-  mvolts -= 3600;
-  return 10 + (mvolts * 0.15F );  // thats mvolts /6.66666666
-}
+bool Xiao::IsChargingBattery() { return digitalRead(BAT_CHARGE_STATE) == LOW; }

@@ -2,10 +2,11 @@
 #include <memory>
 #include <string.h>
 #include <Adafruit_TinyUSB.h>
-#include <xiaobattery.h>
+#include "src/lib/battery.h"
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
 #include "src/lib/scales.h"
+#include "src/lib/debug.h"
 
 
 #define LIGHT_SLEEP_TIMEOUT 60000  // 1 minute
@@ -20,10 +21,6 @@ int NUM_DEVICES = 2;
 const uint8_t tarePin = 7;  // the tare button
 bool tareState = 0;  // tare button push state.
 
-// External button
-const uint8_t buttonPin = 0;
-bool buttonState = 0;
-
 bool debug = 0;  // Enter debug mode, which opens serial over usb.
 bool doCalibrate = 0;  // Enter calibration mode.
 bool enter_dfu = 0;  // Enter DFU mode and reset.
@@ -33,7 +30,7 @@ const uint8_t redPin = 4;    // the number of the LED pin
 const uint8_t greenPin = 5;    // the number of the LED pin
 const uint8_t bluePin = 6;    // the number of the LED pin
 // Current LED color
-uint8_t color[3] = {0,0,0};
+uint8_t color[3] = { 0, 0, 0 };
 
 // Load Cell parameters
 const uint8_t LOADCELL_DOUT_PIN = 9;
@@ -43,19 +40,28 @@ const uint8_t LOADCELL_GAIN = 128;
 // Parameter for Exponential Moving Average
 int EMA_ALPHA = 30;
 
-// Global Variables
-long reading = 0;  // For computing exponential moving average.
+/* ========== Global Variables ========== */
+long reading = 0;  // Raw ADC reading.
 long smoothed_reading = 0;  // For computing exponential moving average.
 uint32_t weight = 0;  // Current weight reading in grams.
 uint32_t prev_weight = 0;  // Previous weight reading in grams.
-uint32_t prev_time = 0;  // To measure increments without delay() 
-uint32_t curr_time = 0;  // Current time stamp
-uint16_t num_samples = 0;
-uint16_t hz = 0;  // For measuring HX711 speed.
-uint32_t sleepTimeoutStart = 0;
-bool is_charging = 0;
-float avg_battery_voltage = 0;
 
+uint32_t curr_time = 0;  // Current time stamp
+uint32_t prev_time = 0;  // To measure increments without delay() 
+
+uint32_t measure_time = 0;  // Microseconds since measurement started
+uint32_t start_measure_time = 0;  // Microseconds since measurement started
+bool currently_measuring = 0;
+
+uint32_t sleepTimeoutStart = 0;
+
+uint16_t num_samples = 0;  // Number of samples obtained from the ADC
+uint16_t hz = 0;  // For measuring HX711 speed
+
+float avg_battery_voltage = 0.0;
+float prev_vbat = -1.0;
+
+/* ========= The device =========== */
 HX711 scale;  // The ADC
 Device* device = nullptr;  // The overall device: WH06, Tindeq
 Xiao battery;
@@ -68,7 +74,6 @@ void setLEDColor(uint8_t red, uint8_t green, uint8_t blue)
   digitalWrite(greenPin, 255 - green);
   digitalWrite(bluePin, 255 - blue);
 }
-
 
 uint8_t* getLEDColor(void)
 {
@@ -99,6 +104,22 @@ void flashLED(void)
     delay(100);
   }
   delete[] rgb;
+}
+
+template <typename T>
+void debugPrint(T msg)
+{
+  if (debug == 1) {
+    Serial.print(msg);
+  }
+}
+
+template <typename T>
+void debugPrintln(T msg)
+{
+  if (debug == 1) {
+    Serial.println(msg);
+  }
 }
 
 void tare(void)
@@ -147,6 +168,8 @@ int getWeight(void)
     numerator = smoothed_reading - scale.OFFSET;
   }
   weight = numerator / scale.SCALE;
+  // Round weight to nearest 50 grams
+  weight = weight - (weight % 50);
 
   debugPrint(reading);
   debugPrint(",");
@@ -162,6 +185,10 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(hz);
   debugPrint(",");
+  debugPrint(curr_time);
+  debugPrint(",");
+  debugPrint(battery.IsChargingBattery());
+  debugPrint(",");
   debugPrint(avg_battery_voltage);
   debugPrint(",");
   debugPrintln(getBatteryPercentage());
@@ -170,29 +197,22 @@ int getWeight(void)
 
 float getBatteryPercentage() {
   float vbat = battery.GetBatteryVoltage();
+  // There is some noise in the battery charging ADC
+  // If vbat is much greater than the previous reading
+  // Just keep the lower reading.
+  if (prev_vbat == -1.0) { prev_vbat = vbat; }
+  if (vbat - prev_vbat > 0.1) {
+    vbat = prev_vbat;
+  } else {
+    prev_vbat = vbat;
+  }
   avg_battery_voltage = ((EMA_ALPHA * vbat) + ((100 - EMA_ALPHA) * avg_battery_voltage))/100;
   if (avg_battery_voltage <= 3.3) {
     return 0.0;
   } else if (avg_battery_voltage >= 4.2) {
     return 1.0;
   } else {
-    return (avg_battery_voltage - 3.3) / 4.2;
-  }
-}
-
-template <typename T>
-void debugPrint(T msg)
-{
-  if (debug == 1) {
-    Serial.print(msg);
-  }
-}
-
-template <typename T>
-void debugPrintln(T msg)
-{
-  if (debug == 1) {
-    Serial.println(msg);
+    return (avg_battery_voltage - 3.3) / (4.2 - 3.3);
   }
 }
 
@@ -226,7 +246,7 @@ int countTarePresses(int window)
 
 void enterDeepSleep() {
   flashLED();
-  if (is_charging) {
+  if (battery.IsChargingBattery()) {
     // set LED to a color indicating charging
   } else {
     turnOffLED();
@@ -238,20 +258,14 @@ void enterDeepSleep() {
 
 void lightSleep() {
   uint8_t* rgb = getLEDColor();
-  setLEDColor(0, 255, 0);
   flashLED();
   scale.power_down();
   turnOffLED();
-  int start_time = millis();
+  int sleep_start_time = millis();
   while (1) {
     tareState = digitalRead(tarePin);
     if (tareState == HIGH) {
       break;
-    }
-    if (is_charging) {
-      // Pulse LED with charge status color
-      // Green, orange, red.
-      // TODO
     }
     if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > DEEP_SLEEP_TIMEOUT)) {
       if (DEVICE_CODE != 1) {
@@ -262,11 +276,32 @@ void lightSleep() {
         enterDeepSleep();
       }
     }
-    if (millis() - start_time >= 2000) {
-      setLEDColor(0, 255, 0);
-      delay(100);
+    int blink_time = 100;
+    uint8_t blink_rgb[3] = { 0 };
+    if (battery.IsChargingBattery()) {
+      float batt_level = getBatteryPercentage();
+      debugPrintln(batt_level);
+      blink_time = 1500;
+      // Pulse LED with charge status color
+      // Green, yellow, red.
+      if (batt_level >= 0.75) {
+        blink_rgb[1] = 255;  // Green
+      } else if (batt_level >= 0.25) {
+        blink_rgb[0] = 255;
+        blink_rgb[1] = 255;  // Yellow
+      } else {
+        blink_rgb[0] = 255;  // Red
+      }
+    } else {
+      blink_rgb[0] = rgb[0];
+      blink_rgb[1] = rgb[1];
+      blink_rgb[2] = rgb[2];
+    }
+    if (millis() - sleep_start_time >= 2000) {
+      setLEDColor(blink_rgb[0], blink_rgb[1], blink_rgb[2]);
+      delay(blink_time);
       turnOffLED();
-      start_time = millis();
+      sleep_start_time = millis();
     }
   }
   scale.power_up();
@@ -278,7 +313,6 @@ void setup()
 {
   // initialize the tare button.
   pinMode(tarePin, INPUT);
-  pinMode(buttonPin, INPUT);
   // initialize the LED.
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
@@ -338,7 +372,7 @@ void setup()
           } else {
             // Something went terribly wrong.
             setLEDColor(255, 0, 0);
-            while (1) {flashLED();}
+            while (1) { flashLED(); }
           }  // end if downcast
         }  // end if doCalibrate 
         break;
@@ -391,10 +425,10 @@ void setup()
   switch (DEVICE_CODE) {
     case 0:
       setLEDColor(0, 200, 255);  // light blue
-      //device = new WH06();
-      device = new Forceboard();
-      //debugPrintln("Device: WH06");
-      debugPrintln("Device: Forceboard");
+      device = new WH06();
+      // device = new Forceboard();
+      debugPrintln("Device: WH06");
+      // debugPrintln("Device: Forceboard");
       break;
     case 1:
       setLEDColor(255, 255, 0);  // yellow
@@ -403,13 +437,11 @@ void setup()
       break;
   }
 
-
   // Set the SCALE.
   float scale_param = readScaleParam();
   debugPrint("Scale set to ");
   debugPrintln(scale_param);
   scale.set_scale(scale_param);
-  //scale.set_scale();
   tare();
 
   // Start BLE
@@ -424,7 +456,7 @@ void loop() {
     weight_diff *= -1;
   }
   // Detect differences of 100g or more only.
-  if (sleepTimeoutStart == 0 || weight_diff > 100) {
+  if (sleepTimeoutStart == 0 || weight_diff >= 100) {
     sleepTimeoutStart = millis();
   }
 
@@ -434,18 +466,40 @@ void loop() {
     tare();
   }
 
+  char cmd = device->getCommand();
+  switch (cmd) {
+    case 0x64:  // Tare
+      tare();
+      break;
+    case 0x65:  // Start measurement
+      if (currently_measuring == 0) {
+        measure_time = start_measure_time = micros();
+      }
+      currently_measuring = 1;
+      break;
+    case 0x66:  // Stop measurement
+      currently_measuring = 0;
+      break;
+    case 0x6f:  // battery
+      float volts = battery.GetBatteryVoltage();
+      uint32_t mv = volts * 1000.0;
+      device->updateBatteryLevel(mv);
+      device->updateBatteryAdv();
+  }
+
   // Update the advertisement every time we get a new weight.
   // This is 10Hz by default on the HX711, but can be increased
   // to 80Hz via the RATE pin.
-  prev_weight = weight;
-  int got_weight = getWeight();
-  if (got_weight == 1) {
-    curr_time = micros();
-    device->updateWeight(weight);
-    device->updateTimestamp(curr_time);
-    int start = micros();
-    device->updateAdvData();
-    num_samples += 1;
+  if (currently_measuring == 1) {
+    prev_weight = weight;
+    int got_weight = getWeight();
+    if (got_weight == 1) {
+      measure_time = micros();
+      device->updateWeight(weight);
+      device->updateTimestamp(measure_time - start_measure_time);
+      device->updateAdvData();
+      num_samples += 1;
+    }
   }
 
   if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > LIGHT_SLEEP_TIMEOUT)) {
@@ -467,5 +521,9 @@ void loop() {
   }
 
   // Poll the battery
-  getBatteryPercentage();
+  // If battery level is low, change LED to red.
+  float batt_level = getBatteryPercentage();
+  if (batt_level <= 0.1) {
+    setLEDColor(255, 0, 0);
+  }
 }
