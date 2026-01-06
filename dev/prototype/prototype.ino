@@ -51,12 +51,15 @@ uint32_t prev_time = 0;  // To measure increments without delay()
 
 uint32_t measure_time = 0;  // Microseconds since measurement started
 uint32_t start_measure_time = 0;  // Microseconds since measurement started
+uint32_t hz_time = 0;    // For measuring device and BLE Hz
 bool currently_measuring = 0;
 
 uint32_t sleepTimeoutStart = 0;
 
 uint16_t num_samples = 0;  // Number of samples obtained from the ADC
-uint16_t hz = 0;  // For measuring HX711 speed
+uint16_t num_packets = 0;  // Number of samples obtained from the ADC
+uint16_t device_hz = 0;    // For measuring HX711 speed
+uint16_t ble_hz = 0;       // For measuring BLE speed
 
 float avg_battery_voltage = 0.0;
 float prev_vbat = -1.0;
@@ -188,7 +191,9 @@ int getWeight(void)
   debugPrint(",");
   debugPrint(weight);
   debugPrint(",");
-  debugPrint(hz);
+  debugPrint(device_hz);
+  debugPrint(",");
+  debugPrint(ble_hz);
   debugPrint(",");
   debugPrint(battery.IsChargingBattery());
   debugPrint(",");
@@ -476,7 +481,7 @@ void loop() {
     case 0x65:  // Start measurement
       if (currently_measuring == 0) {
         tare();
-        measure_time = start_measure_time = micros();
+        measure_time = start_measure_time = hz_time = micros();
       }
       currently_measuring = 1;
       break;
@@ -497,11 +502,14 @@ void loop() {
     prev_weight = weight;
     int got_weight = getWeight();
     if (got_weight == 1) {
+      num_samples += 1;
       measure_time = micros();
       device->updateWeight(weight);
       device->updateTimestamp(measure_time - start_measure_time);
-      device->updateAdvData();
-      num_samples += 1;
+      bool success = device->updateAdvData();
+      if (success == 1) {
+        num_packets += 1;
+      }
     }
   }
 
@@ -515,12 +523,17 @@ void loop() {
   if (curr_time < prev_time) {
     curr_time = prev_time = micros();
   }
+  if (measure_time < start_measure_time) {
+    curr_time = prev_time = micros();
+  }
 
   // Measure sampling rate.
-  if ((curr_time - prev_time) >= 1000000) {
-    hz = num_samples;
-    curr_time = prev_time = micros();
+  if ((measure_time - hz_time) >= 1000000) {
+    device_hz = num_samples;
+    ble_hz = num_packets;
     num_samples = 0;
+    num_packets = 0;
+    hz_time = measure_time;
   }
 
   // Poll the battery
