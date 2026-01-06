@@ -37,7 +37,8 @@ const uint8_t LOADCELL_SCK_PIN = 10;
 const uint8_t LOADCELL_GAIN = 128;
 
 // Parameter for Exponential Moving Average
-int EMA_ALPHA = 30;
+int WEIGHT_EMA_ALPHA = 75;
+int BATT_EMA_ALPHA = 10;
 
 /* ========== Global Variables ========== */
 bool first_loop = 1;
@@ -132,6 +133,12 @@ void tare(void)
   flashLED();
 }
 
+void quickTare(void)
+{
+  debugPrintln("Quick Tare...");
+  scale.tare(1);
+}
+
 int getWeight(void)
 {
   int maxr;
@@ -163,7 +170,7 @@ int getWeight(void)
     smoothed_reading = midr;
   }
   // Exponential moving average filter.
-  smoothed_reading = ((EMA_ALPHA * midr) + ((100 - EMA_ALPHA) * smoothed_reading))/100;
+  smoothed_reading = ((WEIGHT_EMA_ALPHA * midr) + ((100 - WEIGHT_EMA_ALPHA) * smoothed_reading))/100;
   int numerator; 
   if (smoothed_reading < scale.OFFSET) {
     numerator = 0;
@@ -214,7 +221,7 @@ float getBatteryPercentage() {
   } else {
     prev_vbat = vbat;
   }
-  avg_battery_voltage = ((EMA_ALPHA * vbat) + ((100 - EMA_ALPHA) * avg_battery_voltage))/100;
+  avg_battery_voltage = ((BATT_EMA_ALPHA * vbat) + ((100 - BATT_EMA_ALPHA) * avg_battery_voltage))/100;
   if (avg_battery_voltage <= 3.3) {
     return 0.0;
   } else if (avg_battery_voltage >= 4.2) {
@@ -480,7 +487,7 @@ void loop() {
       break;
     case 0x65:  // Start measurement
       if (currently_measuring == 0) {
-        tare();
+        quickTare();
         measure_time = start_measure_time = hz_time = micros();
       }
       currently_measuring = 1;
@@ -489,8 +496,8 @@ void loop() {
       currently_measuring = 0;
       break;
     case 0x6f:  // battery
-      float volts = battery.GetBatteryVoltage();
-      uint32_t mv = volts * 1000.0;
+      //float volts = battery.GetBatteryVoltage();
+      uint32_t mv = avg_battery_voltage * 1000.0;
       device->updateBatteryLevel(mv);
       device->updateBatteryAdv();
   }
