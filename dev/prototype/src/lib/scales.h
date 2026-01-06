@@ -177,27 +177,30 @@ class Mito : public Device
   private:
     // Primary service
     // a9996d01-16e7-49e1-a66f-f9c4ecff3681
-    const uint8_t primary_service_uuid128[16] = {
-      0xa9, 0x99, 0x6d, 0x01, 0x16, 0xe7, 0x49, 0xe1,
-      0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
-    };
-    BLEService mito = BLEService(primary_service_uuid128);
+    //const uint8_t primary_service_uuid128[16] = {
+    //  0xa9, 0x99, 0x6d, 0x01, 0x16, 0xe7, 0x49, 0xe1,
+    //  0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
+    //};
+    //BLEService mito = BLEService(primary_service_uuid128);
+    BLEService mito = BLEService("a9996d01-16e7-49e1-a66f-f9c4ecff3681");
 
     // Data point
     // a9996d02-16e7-49e1-a66f-f9c4ecff3681
-    const uint8_t datapoint_characteristic_uuid128[16] = {
-      0xa9, 0x99, 0x6d, 0x02, 0x16, 0xe7, 0x49, 0xe1,
-      0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
-    };
-    BLECharacteristic datapoint = BLECharacteristic(datapoint_characteristic_uuid128);
+    //const uint8_t datapoint_characteristic_uuid128[16] = {
+    //  0xa9, 0x99, 0x6d, 0x02, 0x16, 0xe7, 0x49, 0xe1,
+    //  0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
+    //};
+    //BLECharacteristic datapoint = BLECharacteristic(datapoint_characteristic_uuid128);
+    BLECharacteristic datapoint = BLECharacteristic("a9996d02-16e7-49e1-a66f-f9c4ecff3681");
 
     // Control point
     // a9996d03-16e7-49e1-a66f-f9c4ecff3681
-    const uint8_t control_characteristic_uuid128[16] = {
-      0xa9, 0x99, 0x6d, 0x03, 0x16, 0xe7, 0x49, 0xe1,
-      0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
-    };
-    BLECharacteristic control_point = BLECharacteristic(control_characteristic_uuid128);
+    //const uint8_t control_characteristic_uuid128[16] = {
+    //  0xa9, 0x99, 0x6d, 0x03, 0x16, 0xe7, 0x49, 0xe1,
+    //  0xa6, 0x6f, 0xf9, 0xc4, 0xec, 0xff, 0x36, 0x81
+    //};
+    //BLECharacteristic control_point = BLECharacteristic(control_characteristic_uuid128);
+    BLECharacteristic controlpoint = BLECharacteristic("a9996d03-16e7-49e1-a66f-f9c4ecff3681");
 
     // For serial communication.
     BLEUart bleuart;

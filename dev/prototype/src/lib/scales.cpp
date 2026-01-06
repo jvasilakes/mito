@@ -227,11 +227,23 @@ Mito* Mito::instance = nullptr;
 
 void Mito::advertiseData(void)
 {
+  // Required to hit the maximum BLE Hz
+  Bluefruit.Periph.setConnIntervalMS(8, 16);
+  Bluefruit.configPrphConn(BLE_GATT_ATT_MTU_DEFAULT,
+                           BLE_GAP_EVENT_LENGTH_DEFAULT,
+                           3,
+                           BLE_GATTC_WRITE_CMD_TX_QUEUE_SIZE_DEFAULT);
+
+  // Start the service
   mito.begin();
   datapoint.setProperties(CHR_PROPS_NOTIFY);
   datapoint.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  datapoint.setMaxLen(sizeof(scale_data));
   datapoint.begin();
-  datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
+
+  controlpoint.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
+  controlpoint.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+  controlpoint.begin();
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.setName(DEVICE_NAME);
@@ -240,9 +252,9 @@ void Mito::advertiseData(void)
 
   /* Start Advertising */
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 32);    // in unit of 0.625 ms, so 32=20ms
-  Bluefruit.Advertising.setFastTimeout(0);      // always advertise at 32.
-  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising.
+  Bluefruit.Advertising.setInterval(32, 128);     // in unit of 0.625 ms, so 32=20ms
+  Bluefruit.Advertising.setFastTimeout(0);        // always advertise at 32.
+  Bluefruit.Advertising.start(0);                 // 0 = Don't stop advertising.
 }
 
 void Mito::updateWeight(uint32_t weight)
@@ -349,4 +361,5 @@ void Mito::calibrate(HX711 scale)
   bleuart.print("Validating...");
   float read_param = readScaleParam();
   bleuart.println(read_param);
+  bleuart.println("Restarting Device");
 }

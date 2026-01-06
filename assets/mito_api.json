@@ -1,0 +1,43 @@
+{"services": [
+	{"name": "Mito Service",
+	 "uuid": "a9996d01-16e7-49e1-a66f-f9c4ecff3681",
+	 "description": "The primary service for interacting with the Mito."}
+	],
+ "characterisitics": [
+	 {"name": "datapoint",
+          "uuid": "a9996d02-16e7-49e1-a66f-f9c4ecff3681",
+	  "properties": ["CHR_PROPS_NOTIFY"],
+	  "permissions": ["SECMODE_OPEN", "SECMODE_NO_ACCESS"],
+	  "description": "The characterisitc for receiving data from the Mito.",
+	  "format": "tag-length-value",
+	  "codes": {0x00: {"name": "battery_res", "description": "Response to 'battery' command.",
+		    "value_format": {"type": "float32",
+			    	     "description": "Battery percentage between 0.0 and 1.0."}
+	                  }
+	   	   },
+	  	   {0x01: {"name": "weight", "description": "Weight measurement.",
+		    "value_format": {"type": ["uint32_t", "uint32_t"],
+			             "description": "Weight in grams and timestamp in microseconds from the start of measurement."}
+		          }
+		   }
+	 },
+	 {"name": "controlpoint",
+          "uuid": "a9996d03-16e7-49e1-a66f-f9c4ecff3681",
+	  "properties": ["CHR_PROPS_WRITE", "CHR_PROPS_WRITE_WO_RESP"],
+	  "permissions": ["SECMODE_OPEN", "SECMODE_OPEN"],
+	  "description": "The characteristic for sending commands to the Mito.",
+	  "format": "tag-length-value",
+	  "codes": {0x74: {"name": "tare", "description": "Tare the Mito.",
+		  	   "value_format": null},
+		    0x73: {"name": "start", "description": "Start weight measurement.",
+		  	   "value_format": null},
+		    0x65: {"name": "stop", "description": "Stop weight measurement.",
+		  	   "value_format": null},
+		    0x62: {"name": "battery", "description": "Get battery percentage.",
+		  	   "value_format": null},
+		    0x6C: {"name": "sleep", "description": "Put the Mito to sleep.",
+		  	   "value_format": null}
+	  	   }
+	 }
+	]
+}

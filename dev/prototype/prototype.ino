@@ -300,12 +300,17 @@ void lightSleep() {
       // Pulse LED with charge status color
       // Green, yellow, red.
       if (batt_level >= 0.75) {
+        blink_rgb[0] = 0;
         blink_rgb[1] = 255;  // Green
+        blink_rgb[2] = 0;
       } else if (batt_level >= 0.25) {
         blink_rgb[0] = 255;
         blink_rgb[1] = 255;  // Yellow
+        blink_rgb[2] = 0;
       } else {
         blink_rgb[0] = 255;  // Red
+        blink_rgb[1] = 0;
+        blink_rgb[2] = 0;
       }
     } else {
       blink_rgb[0] = rgb[0];
