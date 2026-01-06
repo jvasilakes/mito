@@ -96,7 +96,7 @@ All pre-built Mito's are already calibrated. If you need to redo it however, fol
 
 ```
 cd dev
-arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense prototype
+arduino-cli compile --export-binaries --fqbn Seeeduino:nrf52:xiaonRF52840Sense prototype
 python ../utils/uf2conv.py prototype/build/Seeeduino.nrf52.xiaonRF52840Sense/prototype.ino.hex --family 0xADA52840 --convert --output prototype/releases/mito_vX.X.X.uf2 
 ```
 
