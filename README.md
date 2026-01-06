@@ -100,13 +100,17 @@ arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense prototype
 python ../utils/uf2conv.py prototype/build/Seeeduino.nrf52.xiaonRF52840Sense/prototype.ino.hex --family 0xADA52840 --convert --output prototype/releases/mito_vX.X.X.uf2 
 ```
 
+Change the `X.X.X` to your desired version.
+
 ### Debug Mode
 
 If you're doing development and want to access information over serial, plug your Mito into your computer while holding down the tare button. Use single presses of the tare button until you see a red light. Double click the tare button to enter debug mode. In this mode, the Mito will not start its initialization routine until you've connected to it with a serial monitor. 
 
 Once the Mito has begun measuring, it will print data in the following format for each measurement taken from the ADC:
 
-`adc_reading,smoothed_adc_reading,scale_offset,scale_calibration_factor,weight_grams,sample_rate,battery_is_charging,battery_voltage,battery_percentage`
+`adc_reading,smoothed_adc_reading,scale_offset,scale_calibration_factor,weight_grams,device_sample_rate_hz,ble_notify_rate_hz,battery_is_charging,battery_voltage,battery_percentage`
+
+It will also print out any commands it receives from the central, and when the device is charging in sleep mode it will print out the current battery percentage.
 
 
 ### Entering firmware update mode with the hardware reset button

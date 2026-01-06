@@ -18,7 +18,7 @@ class Device
     virtual void updateBatteryLevel(uint32_t mv) {};
     virtual void updateBatteryAdv(void) {};
     virtual void advertiseData(void);
-    virtual void updateAdvData(void);
+    virtual bool updateAdvData(void);
     virtual char getCommand(void) {return 0x65;};  // Start measurement
     virtual ~Device() {};
 };
@@ -52,7 +52,7 @@ class WH06 : public Device
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
-    void updateAdvData(void) override;
+    bool updateAdvData(void) override;
 };
 
 
@@ -90,7 +90,7 @@ class Tindeq : public Device
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
-    void updateAdvData(void) override;
+    bool updateAdvData(void) override;
     void updateBatteryLevel(uint32_t mv) override;
     void updateBatteryAdv(void) override;
 
@@ -168,7 +168,7 @@ class Forceboard : public Device
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
-    void updateAdvData(void) override;
+    bool updateAdvData(void) override;
 };
 
 
@@ -222,7 +222,7 @@ class Mito : public Device
     // Setup and start BLE advertising.
     void begin(void) override;
     void advertiseData(void) override;
-    void updateAdvData(void) override;
+    bool updateAdvData(void) override;
 
     void setupCalibrate(void);
     void calibrate(HX711 scale);

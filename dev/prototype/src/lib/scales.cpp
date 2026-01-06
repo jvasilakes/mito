@@ -43,12 +43,13 @@ void WH06::advertiseData(void)
   Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising.
 }
 
-void WH06::updateAdvData(void)
+bool WH06::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
   Bluefruit.Advertising.clearData();
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
+  return 1;
 }
 
 void WH06::begin(void)
@@ -122,10 +123,10 @@ void Forceboard::updateTimestamp(uint32_t time)
   return;
 }
 
-void Forceboard::updateAdvData(void)
+bool Forceboard::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
-  datapoint.notify(&scale_data, sizeof(scale_data));
+  return datapoint.notify(&scale_data, sizeof(scale_data));
 }
 
 void Forceboard::begin(void)
@@ -139,8 +140,12 @@ void Forceboard::begin(void)
 *******************************/
 void Tindeq::advertiseData(void)
 {
-  //Bluefruit.Periph.setConnIntervalMS(8, 16);
-  //Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+  // Required to hit the maximum BLE Hz
+  Bluefruit.Periph.setConnIntervalMS(8, 16);
+  Bluefruit.configPrphConn(BLE_GATT_ATT_MTU_DEFAULT,
+                           BLE_GAP_EVENT_LENGTH_DEFAULT,
+                           3,
+                           BLE_GATTC_WRITE_CMD_TX_QUEUE_SIZE_DEFAULT);
 
   // Start the service
   progressor.begin();
@@ -178,10 +183,10 @@ void Tindeq::updateTimestamp(uint32_t time)
   memcpy(&scale_data[6], &time, sizeof(uint32_t));
 }
 
-void Tindeq::updateAdvData(void)
+bool Tindeq::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
-  datapoint.notify(&scale_data, sizeof(scale_data));
+  return datapoint.notify(&scale_data, sizeof(scale_data));
 }
 
 
@@ -252,10 +257,10 @@ void Mito::updateTimestamp(uint32_t time)
   memcpy(&scale_data[6], &time, sizeof(uint32_t));
 }
 
-void Mito::updateAdvData(void)
+bool Mito::updateAdvData(void)
 {
   // Update the advertisement with the current scale data.
-  datapoint.notify(&scale_data, sizeof(scale_data));
+  return datapoint.notify(&scale_data, sizeof(scale_data));
 }
 
 void Mito::begin(void)
