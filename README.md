@@ -23,12 +23,12 @@ On one side of your device you'll see
 
 On the other there is a USB-C port that is used for battery charging and firmware updates.
 
-Assuming you've obtained a prebuilt device, it should be ready to go out of the box. Flip the switch to turn it on, and you'll see a green light for 1 second before it changes to yellow. Download the Frez app on your phone, register/sign in to your account, then press the red "Connect a device" button in lower corner. If the Mito is powered on, a scan of available devices should reveal a device called "Progressor". Connect to it, register it as "Mito" or what ever you like, and start training!
+Assuming you've obtained a prebuilt device, it should be ready to go out of the box. Flip the switch to turn it on, and you'll see a green light for 1 second before it changes to yellow. Download the Frez app on your phone, register/sign in to your account, then press the "connect" button on the main page. If the Mito is powered on, a scan of available devices should reveal a device called "Progressor". Connect to it, register it as "Mito" or whatever name you like, and start training!
 
 
 ### Automatic sleep mode
 
-After 1 minute of inactivity (i.e., no weight changes) the Mito will enter sleep mode to save battery. This is indicated by a periodic flashing LED. To wake your Mito up, simply press the tare button and continue your training.
+After 1 minute of inactivity (i.e., no weight changes) the Mito will enter sleep mode to save battery. This is indicated by a periodic flashing LED. To wake your Mito up, simply press the tare button and continue your training. After 10 minutes in light sleep, the Mito will enter deep sleep from which it can only be woken up by turning it off and on again.
 
 
 ### Charging the battery
@@ -43,12 +43,13 @@ Firmware updates will be provided here on the Releases page, so keep an eye out.
  1. Download the new firmware UF2 file onto your computer (e.g., `mito_v0.0.1.uf2`).
  2. Plug your Mito into your computer using the USB-C port while holding down the tare button. Release the button once you see the red light. You've now entered maintenance mode selection.
  3. Use single presses of the tare button to cycle through the maintenance modes until you see a blue light, which indicates firmware update mode. Double click the tare button to select it.
- 4. The Mito should turn off and after a few moments a USB device called XIAO-SENSE should pop up on your computer. Simply drag and drop the new UF2 file onto the root folder of this device. Once the copy is complete, the Mito should reset, and you're done!
+ 4. The Mito should turn off and after a few moments a USB device called XIAO-SENSE should pop up on your computer. Simply drag and drop the new UF2 file onto the root folder of this device. Once the copy is complete, the Mito should reset.
+ 5. Unplug the USB cable and start training!
 
 
 ### Changing the default device mode
 
-The Mito is compatible with both the Tindeq and Frez apps for visualizing and tracking your training sessions. By default the Mito is in Tindeq mode, meaning that it pretends to be a Tindeq device. This mode currently provides the most stable and fast bluetooth connection to the Tindeq app, and the Frez app is compatible with the Tindeq as well, although it is a bit slow.
+The Mito is compatible with the Frez app for visualizing and tracking your training sessions. By default the Mito is in Tindeq mode (yellow light), meaning that it pretends to be a Tindeq device. This mode currently provides the most stable and fastest bluetooth connection to the Frez app. The Tindeq app is currently not supported, and your experience may vary.
 
 If for whatever reason you want your Mito to pretend to be a WH-06 (the original device around which Frez was built), follow these steps:
 
@@ -92,7 +93,18 @@ All pre-built Mito's are already calibrated. If you need to redo it however, fol
  9. Power cycle the Mito, connect to the Frez app, and validate that the reading is correct for the weight you used to calibrate. 
 
 
+### Configuration
+
+You can manually set the following variables in `prototype/src/lib/config.h`. For the changes to take effect, you will need to recompile and upload the firmware to your Mito (see below).
+
+ * `LIGHT_SLEEP_SECONDS`: The number of seconds with no weight changes until the Mito enters light sleep. Default 60.
+ * `DEEP_SLEEP_SECONDS`: The number of seconds in light sleep until the Mito enters deep sleep. Default 600.
+ * `SCALE_FACTOR`: The calibration scale factor. Default set during calibration (see above). This can be used to fine-tune your precise calibration factor.
+
+
 ### Building the firmware
+
+First, clone this repository or download the code for your chosen release. Then,
 
 ```
 cd dev
@@ -100,7 +112,7 @@ arduino-cli compile --export-binaries --fqbn Seeeduino:nrf52:xiaonRF52840Sense p
 python ../utils/uf2conv.py prototype/build/Seeeduino.nrf52.xiaonRF52840Sense/prototype.ino.hex --family 0xADA52840 --convert --output prototype/releases/mito_vX.X.X.uf2 
 ```
 
-Change the `X.X.X` to your desired version.
+Change the `X.X.X` to your desired version. If you've made changes to an official release, I recommend adding a suffix to indicate it (e.g., `mito_v0.0.4_dev.uf2`).
 
 ### Debug Mode
 
@@ -118,4 +130,4 @@ It will also print out any commands it receives from the central, and when the d
 It might happen that a failed firmware update means that you can't enter firmware update mode using the method described above. If this happens you'll have to use the hardware reset button on the microcontroller. You can do this in two ways:
 
  1. Insert a small thin object into the hole below the 'S' on the CRUX TOOLS side of the Mito. a bobby pin works great for this. You'll have to fish around a bit, but the XIAO's reset button should be directly below this. Do your best to double click it. If you're successful, the Mito will turn off and you'll see the XIAO-SENSE USB device pop up on your computer. 
- 2. If the above is simply too annoying, you can also open the case using a standard Philip's head screwdriver.
+ 2. If the above is simply too annoying, you can also open the case using a standard Philip's head screwdriver. If you do this, there is a chance you will have to re-calibrate after putting it together again, since the load cell can get shifted slightly.
