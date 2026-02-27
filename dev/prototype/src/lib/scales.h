@@ -7,6 +7,7 @@
 #include <bluefruit.h>
 #include "HX711.h"
 #include "flash.h"
+#include "config.h"
 
 
 class Device
@@ -33,7 +34,7 @@ class WH06 : public Device
     static const int SCALE_DATA_TIMESTAMP_MSB = 17;   // Most significant bit
     static const int SCALE_DATA_TIMESTAMP_LSB =  18;  // Least significant bit
     static const int SCALE_DATA_LEN = 19;   // See scale_data init below.
-    const char DEVICE_NAME[6] = "IF_B7";       // All WH06 devices have this name.    
+    const char device_name[6] = "IF_B7";       // All WH06 devices have this name.
     uint8_t scale_data[SCALE_DATA_LEN] = {
       0x00,0x01,  // 0, 1: TomTom industries lol
       0x02,0x03,0x11,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,  // 2-10: idk but seems to the be MAC?
@@ -79,7 +80,7 @@ class Tindeq : public Device
 
     uint8_t txValue = 0;
 
-    const char DEVICE_NAME[11] = "Progressor";
+    const char* device_name = "Progressor";
 
     // Update the scale_data with the current weight reading.
     void updateWeight(uint32_t weight) override;
@@ -157,7 +158,7 @@ class Forceboard : public Device
     };
     uint8_t txValue = 0;
 
-    const char DEVICE_NAME[12] = "Force Board";
+    const char* device_name = "ForceBoard";
 
     // Update the scale_data with the current weight reading.
     void updateWeight(uint32_t weight) override;
@@ -211,7 +212,7 @@ class Mito : public Device
       0x00, 0x00, 0x00, 0x00  // timestamp uint32_t
     };
 
-    const char DEVICE_NAME[11] = "Mito";
+    const char* device_name = "Mito";
 
     // Update the scale_data with the current weight reading.
     void updateWeight(uint32_t weight) override;

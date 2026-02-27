@@ -32,7 +32,7 @@ void WH06::advertiseData(void)
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.setType(BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED);
   // This is necessary, as the Frez app looks for this name to connect to.
-  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.setName(device_name);
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.addManufacturerData(&scale_data, SCALE_DATA_LEN);
 
@@ -87,7 +87,7 @@ void Forceboard::advertiseData(void)
   };
   Bluefruit.Advertising.addData(0xFF, &data, sizeof(data));
 
-  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.setName(device_name);
   Bluefruit.Advertising.addName();
 
   Bluefruit.Advertising.addService(forceboard);
@@ -159,7 +159,7 @@ void Tindeq::advertiseData(void)
   controlpoint.begin();
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.setName(device_name);
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.addService(progressor);
 
@@ -234,7 +234,7 @@ void Mito::advertiseData(void)
   datapoint.notify(&scale_data, sizeof(scale_data));  // timestamp
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.setName(device_name);
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.addService(mito);
 
@@ -274,7 +274,7 @@ void Mito::setupCalibrate()
 {
   Bluefruit.begin();
   Bluefruit.setTxPower(4);
-  Bluefruit.setName(DEVICE_NAME);
+  Bluefruit.setName(device_name);
   
   bleuart.begin();
 
