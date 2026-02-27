@@ -2,6 +2,7 @@
 #include <memory>
 #include <string.h>
 #include <Adafruit_TinyUSB.h>
+#include "src/lib/config.h"
 #include "src/lib/battery.h"
 #include "src/lib/HX711.h"
 #include "src/lib/flash.h"
@@ -55,6 +56,9 @@ uint32_t start_measure_time = 0;  // Microseconds since measurement started
 uint32_t hz_time = 0;    // For measuring device and BLE Hz
 bool currently_measuring = 0;
 
+// Convert to milliseconds
+uint32_t light_sleep_timeout = LIGHT_SLEEP_SECONDS * 1000;
+uint32_t deep_sleep_timeout = DEEP_SLEEP_SECONDS * 1000;
 uint32_t sleepTimeoutStart = 0;
 
 uint16_t num_samples = 0;  // Number of samples obtained from the ADC
@@ -282,7 +286,7 @@ void lightSleep() {
     if (tareState == HIGH) {
       break;
     }
-    if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > DEEP_SLEEP_TIMEOUT)) {
+    if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > deep_sleep_timeout)) {
       if (DEVICE_CODE != 1) {
         // Don't enter deep sleep when Tindeq, as this will end the training
         //   session in the app without saving progress. Annoying if you've programmed
@@ -458,7 +462,12 @@ void setup()
   }
 
   // Set the SCALE.
-  float scale_param = readScaleParam();
+  float scale_param;
+  #ifndef SCALE_FACTOR
+    scale_param = readScaleParam();
+  #else
+    scale_param = SCALE_FACTOR;
+  #endif
   debugPrint("Scale set to ");
   debugPrintln(scale_param);
   scale.set_scale(scale_param);
@@ -525,7 +534,7 @@ void loop() {
     }
   }
 
-  if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > LIGHT_SLEEP_TIMEOUT)) {
+  if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > light_sleep_timeout)) {
     lightSleep();
     // Will sleep until tare button pressed.
     sleepTimeoutStart = millis();
