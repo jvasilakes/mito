@@ -2,6 +2,7 @@
 #define FLASH_h
 
 void initFlash(void);
+void eraseFlash(void);
 void saveScaleParam(float param);
 float readScaleParam();
 void saveDefaultDevice(uint8_t device_code);

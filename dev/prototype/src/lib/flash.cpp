@@ -50,6 +50,11 @@ void initFlash(void)
   flash.begin(&P25Q16H, 1);
 }
 
+void eraseFlash(void)
+{
+  flash.eraseChip();
+}
+
 void saveScaleParam(float param)
 {
   memcpy(param_bufwrite, &param, sizeof(param));
