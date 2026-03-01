@@ -2,11 +2,11 @@
 #include <memory>
 #include <string.h>
 #include <Adafruit_TinyUSB.h>
-#include "src/lib/config.h"
-#include "src/lib/battery.h"
-#include "src/lib/HX711.h"
-#include "src/lib/flash.h"
-#include "src/lib/scales.h"
+#include "lib/config.h"
+#include "lib/battery.h"
+#include "lib/HX711.h"
+#include "lib/flash.h"
+#include "lib/scales.h"
 
 
 /* Set in setup() */

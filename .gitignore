@@ -1,3 +1,5 @@
+dev/mito/releases
+dev/mito/build
 hardware/mito-backups/*
 hardware/fp-info-cache
 *.lck
