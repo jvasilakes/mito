@@ -82,7 +82,7 @@ Frez shows battery level next to the connected device icon in the lower right co
 
 All pre-built Mito's are already calibrated. If you need to redo it however, follow these steps:
 
- 1. Download "Serial Bluetooth Terminal" app on your phone. 
+ 1. Download [Serial Bluetooth Terminal](https://play.google.com/store/apps/details?id=de.kai_morich.serial_bluetooth_terminal&pcampaignid=web_share) app on your phone. 
  2. Turn on the Mito while holding down the tare button to enter maintenance mode.
  3. Use single presses of the tare button to cycle through modes until you see a white light. Press the tare button twice quickly to select this, which will enter calibration mode.
  4. Open the Serial Bluetooth Terminal app, scan for devices, and select the Mito.
