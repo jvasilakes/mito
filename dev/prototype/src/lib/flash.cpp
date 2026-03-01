@@ -30,7 +30,6 @@ SPIFlash_Device_t const P25Q16H {
 // Use this constructor to tune the QSPI pins.
 // Adafruit_FlashTransport_QSPI flashTransport(PIN_QSPI_SCK, PIN_QSPI_CS, PIN_QSPI_IO0, PIN_QSPI_IO1, PIN_QSPI_IO2, PIN_QSPI_IO3);
 Adafruit_FlashTransport_QSPI flashTransport;
-
 Adafruit_SPIFlash flash(&flashTransport);
 
 /* Size of the scale param. 4 because we're converting

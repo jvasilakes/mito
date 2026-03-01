@@ -9,10 +9,6 @@
 #include "src/lib/scales.h"
 
 
-#define LIGHT_SLEEP_TIMEOUT 60000  // 1 minute
-#define DEEP_SLEEP_TIMEOUT 180000  // 3 minutes
-
-
 /* Set in setup() */
 uint8_t DEVICE_CODE;  // 0: WH06  1: Tindeq
 int NUM_DEVICES = 2;
@@ -70,9 +66,9 @@ float avg_battery_voltage = 0.0;
 float prev_vbat = -1.0;
 
 /* ========= The device =========== */
-HX711 scale;  // The ADC
+HX711 scale;  // The HX711 ADC
 Device* device = nullptr;  // The overall device: WH06, Tindeq
-Xiao battery;
+XiaoBattery battery;  // The battery ADC
 
 void setLEDColor(uint8_t red, uint8_t green, uint8_t blue)
 {
@@ -139,6 +135,7 @@ void tare(void)
 
 void quickTare(void)
 {
+  // Same as tare but don't flash the LED.
   debugPrintln("Quick Tare...");
   scale.tare(1);
 }
@@ -359,6 +356,7 @@ void setup()
     int num_presses;
     int interrupt_mode = 0;
     while (1) {
+
       switch (interrupt_mode) {
         case 0:  // debug mode
           setLEDColor(255, 180, 0);  // orange
@@ -378,10 +376,13 @@ void setup()
           doCalibrate = 0;
           enter_dfu = 1;
       } // end switch interrupt_mode
+
       num_presses = countTarePresses(1000);
       if (num_presses == 1) {
+        // Cycle to the next option
         interrupt_mode = (interrupt_mode + 1) % 3;
       } else if (num_presses == 2) {
+        // Select the current option
         flashLED();
         if (enter_dfu == 1) {
           // See https://forums.adafruit.com/viewtopic.php?t=218553
@@ -402,7 +403,8 @@ void setup()
         break;
       } else { continue; }
     }  // end while
-  // Otherwise, show green for 1s at startup
+
+  // If the button is not held, show green for 1s at startup
   // allowing user to press tare to enter different modes.
   } else {
     setLEDColor(0, 255, 0);  // green
@@ -437,7 +439,7 @@ void setup()
 
   if (debug == 1) {
     Serial.begin(115200);
-    while ( !Serial ) delay(10);   // for nrf52840 with native usb
+    while ( !Serial ) delay(10);  // wait for serial connection
     Serial.println("Starting.");
   }
 
@@ -450,9 +452,7 @@ void setup()
     case 0:
       setLEDColor(0, 200, 255);  // light blue
       device = new WH06();
-      // device = new Forceboard();
       debugPrintln("Device: WH06");
-      // debugPrintln("Device: Forceboard");
       break;
     case 1:
       setLEDColor(255, 255, 0);  // yellow
@@ -494,6 +494,7 @@ void loop() {
     tare();
   }
 
+  // Get the command code from the central.
   char cmd = device->getCommand();
   switch (cmd) {
     case 0x64:  // Tare
@@ -510,7 +511,6 @@ void loop() {
       currently_measuring = 0;
       break;
     case 0x6f:  // battery
-      //float volts = battery.GetBatteryVoltage();
       uint32_t mv = avg_battery_voltage * 1000.0;
       device->updateBatteryLevel(mv);
       device->updateBatteryAdv();
@@ -535,8 +535,9 @@ void loop() {
   }
 
   if (sleepTimeoutStart > 0 && ((millis() - sleepTimeoutStart) > light_sleep_timeout)) {
-    lightSleep();
     // Will sleep until tare button pressed.
+    // Will enter deep sleep if in light sleep for deep_sleep_timeout milliseconds.
+    lightSleep();
     sleepTimeoutStart = millis();
   }
 

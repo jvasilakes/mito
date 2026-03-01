@@ -3,6 +3,7 @@ hardware/fp-info-cache
 *.lck
 dev/prototype/build/
 *.FCBak
+*.swp
 
 # Prerequisites
 *.d
