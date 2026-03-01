@@ -3,14 +3,14 @@
 A tiny, cheap, hackable, completely open-source force gauge for isometric finger strength training.
 
 
-![Mito](https://github.com/jvasilakes/mito/blob/master/pics/1000009354_cropped.jpg?raw=true)
+![Mito](https://github.com/jvasilakes/mito/blob/main/pics/1000009354_cropped.jpg?raw=true)
 
 
 ## Hardware information
 
 The Mito is based on the Seeed XIAO NRF52840 microcontroller, an HX711 ADC, and a custom load cell. It runs at approximately 80 samples per second on the hardware side, and sends approximately 60 samples per second over bluetooth. Initial tests show a standard error of about 100g. The load cell and two Peguet 3.5mm stainless steel maillon rapides provide a working load limit of 220kg and a breaking load of 1100kg. 
 
-![Mito PCB](https://github.com/jvasilakes/mito/blob/master/hardware/mito.png?raw=true)
+![Mito PCB](https://github.com/jvasilakes/mito/blob/main/hardware/mito.png?raw=true)
 
 
 ## User Guide
